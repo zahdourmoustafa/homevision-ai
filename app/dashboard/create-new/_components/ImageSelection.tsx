@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import Image from 'next/image';
 import { FiUploadCloud } from 'react-icons/fi';
+import { Card } from '@/components/ui/card';
 
 interface ImageSelectionProps {
   onFileSelected?: (file: File) => void; // Callback to return the selected file
@@ -21,25 +22,35 @@ function ImageSelection({ onFileSelected }: ImageSelectionProps) {
   };
 
   return (
-    <div className="w-full cursor-pointer transition-all">
-      <label className="block text-sm font-medium text-gray-700 mb-2">
-        Select Image of your room
-      </label>
-      <div className="mt-2">
+    <Card className="w-full p-3 bg-white">
+      <div className="space-y-2">
+        {preview && (
+          <div className="relative w-full h-[200px] rounded-lg overflow-hidden">
+            <Image 
+              src={preview} 
+              alt="Room preview" 
+              fill
+              className="object-contain"
+              sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+            />
+          </div>
+        )}
+        
         <label
           htmlFor="upload-image"
-          className={`flex flex-col items-center justify-center w-full h-64 border-2 border-gray-300 border-dashed rounded-lg cursor-pointer bg-gray-50 hover:bg-gray-100 transition-colors`}
+          className={`relative flex flex-col items-center justify-center w-full ${
+            preview ? 'h-16' : 'h-[200px]'
+          } border-2 border-dashed border-gray-300 rounded-lg cursor-pointer bg-gray-50 hover:bg-gray-100 transition-all duration-300 ease-in-out`}
         >
-          {preview ? (
-            <div className="relative w-full h-full">
-              <Image src={preview} alt="Image preview" layout="fill" objectFit="cover" />
+          <div className="flex flex-col items-center justify-center p-2">
+            <FiUploadCloud className="w-6 h-6 text-gray-400 mb-1" />
+            <div className="text-center">
+              <p className="text-sm font-medium text-gray-600">
+                {preview ? 'Change image' : 'Upload an image'}
+              </p>
+              <p className="text-xs text-gray-500">PNG, JPG up to 10MB</p>
             </div>
-          ) : (
-            <div className="flex flex-col items-center justify-center pt-5 pb-6">
-              <FiUploadCloud className="w-12 h-12 text-gray-400" />
-              <p className="mt-1 text-sm text-gray-600">Click to upload</p>
-            </div>
-          )}
+          </div>
           <input
             id="upload-image"
             type="file"
@@ -49,7 +60,7 @@ function ImageSelection({ onFileSelected }: ImageSelectionProps) {
           />
         </label>
       </div>
-    </div>
+    </Card>
   );
 }
 

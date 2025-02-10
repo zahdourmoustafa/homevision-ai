@@ -65,14 +65,22 @@ const uploadBase64ImageToSupabase = async (base64Image: string, fileName: string
 
 export async function POST(req: Request) {
   try {
-    // Parse the request body
-    const { imageUrl, roomType, design, additionalRequirement } = await req.json();
+    const { imageUrl, roomType, design, additionalRequirement, userEmail } = await req.json();
+
+    // Validate user email
+    if (!userEmail) {
+      return NextResponse.json(
+        { error: "User email is required" },
+        { status: 400 }
+      );
+    }
 
     console.log("Received request with data:", {
       imageUrl,
       roomType,
       design,
       additionalRequirement,
+      userEmail,
     });
 
     // Validate the input
@@ -132,10 +140,11 @@ export async function POST(req: Request) {
       .from("rooms")
       .insert([
         {
-          image_url: publicUrl, // Match the column name in your schema
-          room_type: roomType, // Match the column name in your schema
-          design_type: design, // Match the column name in your schema
-          additional_requirements: additionalRequirement, // Match the column name in your schema
+          image_url: imageUrl,
+          room_type: roomType,
+          design_type: design,
+          additional_requirements: additionalRequirement,
+          user_email: userEmail,
         },
       ]);
 
@@ -147,7 +156,7 @@ export async function POST(req: Request) {
     console.log("Room data saved to Supabase:", dbData);
 
     // Return the public URL of the uploaded image
-    return NextResponse.json({ result: publicUrl });
+    return NextResponse.json({ result: output });
   } catch (e) {
     console.error("Error in /api/redesign-room:", e);
 

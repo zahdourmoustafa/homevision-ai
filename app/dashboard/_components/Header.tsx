@@ -3,6 +3,7 @@
 import React, { useContext } from "react";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
+import { UserButton } from "@clerk/nextjs";
 
 function Header() {
     // const {userDetail,setUserDetail} = useContext(userDetailContext);
@@ -20,6 +21,7 @@ function Header() {
             {/* <h2>{userDetails?.credits}</h2> */}
         </div>
         {/* button of auth */}
+        <UserButton />
       </div>
     </div>
     

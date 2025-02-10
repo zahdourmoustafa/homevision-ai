@@ -13,21 +13,13 @@ interface RoomTypeProps {
 
 function RoomType({ selectedRoomType }: RoomTypeProps) {
   return (
-    <div className="space-y-2">
-      <label 
-        htmlFor="room-type" 
-        className="block text-sm font-medium text-gray-700 dark:text-gray-200"
-      >
-        Room Type *
-      </label>
+    <div className="space-y-1">
+      <label className="text-sm font-medium text-gray-700">Room Type</label>
       <Select onValueChange={(value) => selectedRoomType(value)}>
-        <SelectTrigger 
-          id="room-type" 
-          className="w-full md:w-[280px] focus:ring-2 focus:ring-primary font-bold"
-        >
+        <SelectTrigger className="w-full h-9">
           <SelectValue placeholder="Select a room type" />
         </SelectTrigger>
-        <SelectContent className="font-medium">
+        <SelectContent>
           <SelectItem value="living-room">Living Room</SelectItem>
           <SelectItem value="bedroom">Bedroom</SelectItem>
           <SelectItem value="kitchen">Kitchen</SelectItem>

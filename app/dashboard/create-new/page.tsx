@@ -11,6 +11,8 @@ import axios from 'axios';
 import { supabase } from '@/lib/supabase';
 import { TextLoader } from './_components/CustomLoading';
 import BeforeAfterSliderComponent from './_components/BeforeAfterSlider';
+import { MdPhotoLibrary } from 'react-icons/md';
+import { useUser } from "@clerk/nextjs";
 
 function CreateNew() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null); // Store the selected file
@@ -24,6 +26,7 @@ function CreateNew() {
   const [generatedImage, setGeneratedImage] = useState<string | null>(null); // Generated image URL
   const [error, setError] = useState<string | null>(null); // Error message
   const [rawImageUrl, setRawImageUrl] = useState<string | null>(null); // Raw image URL
+  const { user } = useUser();
 
   // Add an array of loading messages
   const loadingMessages = [
@@ -86,6 +89,11 @@ function CreateNew() {
       return;
     }
 
+    if (!user?.emailAddresses?.[0]?.emailAddress) {
+      toast.error('User email not found. Please ensure you are logged in.');
+      return;
+    }
+
     try {
       setIsLoading(true);
       setError(null);
@@ -100,7 +108,8 @@ function CreateNew() {
         imageUrl: rawImageUrl,
         roomType: formData.room,
         design: formData.design,
-        additionalRequirement: formData.additionalRequirement
+        additionalRequirement: formData.additionalRequirement,
+        userEmail: user.emailAddresses[0].emailAddress
       });
 
       // Step 3: Set the generated image URL
@@ -116,45 +125,69 @@ function CreateNew() {
   };
 
   return (
-    <div className="max-w-6xl mx-auto p-8">
-      <div className="mb-10 space-y-3">
-        <h2 className="font-bold text-4xl text-blue-700 text-center">
-          Experience the magic of AI Interior Design
-        </h2>
-        <p className='text-center text-gray-600 text-lg'>
-          Transform any rooms with a click in seconds
-        </p>
-      </div>
+    <div className="flex flex-col md:flex-row min-h-screen bg-gray-50">
+      {/* Left Sidebar - Full width on mobile */}
+      <div className="w-full md:w-[600px] border-b md:border-b-0 md:border-r bg-white p-3">
+        <div className="space-y-4">
+          {/* Room Style Title Section */}
+          <div className="space-y-1">
+            <h2 className="text-xl font-semibold">Room Style</h2>
+            <p className="text-xs text-gray-500">
+              Replace the theme of your space with 20+ curated styles
+            </p>
+          </div>
 
-      <div className='grid grid-cols-1 md:grid-cols-2 gap-8 items-start justify-center mt-10'> 
-        {/* Image Selection */}
-        <div className="bg-white p-6 rounded-lg shadow-md">
-          <ImageSelection onFileSelected={handleFileSelected} />
-        </div>
+          {/* Image Selection */}
+          <div className="space-y-1">
+            <label className="text-sm font-medium text-gray-700">Room Photo</label>
+            <ImageSelection onFileSelected={handleFileSelected} />
+          </div>
 
-        {/* Form input*/}
-        <div className="bg-white p-6 rounded-lg shadow-md space-y-6">
-          {/* Room type */}
-          <RoomType selectedRoomType={(value) => onHandleInputChanged(value, "room")} />
+          {/* Room Type Selection */}
+          <div className="space-y-1">
+            <RoomType selectedRoomType={(value) => onHandleInputChanged(value, "room")} />
+          </div>
 
-          {/* Design type */}
-          <DesignType selectedDesign={(value) => onHandleInputChanged(value, "design")} />
+          {/* Design Style Selection */}
+          <div className="space-y-1">
+            <DesignType selectedDesign={(value) => onHandleInputChanged(value, "design")} />
+          </div>
 
-          {/* Additional requirements textarea */}
-          <AdditionalReq AdditionalReq={(value) => onHandleInputChanged(value, "additionalRequirement")} />
+          {/* Additional Requirements - Optional, can be removed if space is tight */}
+          <div className="space-y-1">
+            <AdditionalReq AdditionalReq={(value) => onHandleInputChanged(value, "additionalRequirement")} />
+          </div>
 
-          {/* Button to trigger the entire process */}
+          {/* Generate Button */}
           <Button 
             onClick={generateAiImage}
             disabled={isLoading || !selectedFile || !formData.room || !formData.design}
-            className="w-full bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
+            className="w-full bg-blue-600 hover:bg-blue-700 text-white h-9"
           >
             {isLoading ? 'Redesigning...' : 'Redesign Room'}
           </Button>
 
-          {/* Add TextLoader when loading */}
-          {isLoading && (
-            <div className="mt-6">
+          {/* Error Message */}
+          {error && (
+            <p className="text-red-500 text-xs mt-1">{error}</p>
+          )}
+
+          <p className='text-xs text-gray-400'>NOTE: 1 credit will be used to redesign your room</p>
+        </div>
+      </div>
+
+      {/* Right Content Area - Full width on mobile */}
+      <div className="flex-1 p-4 md:p-8 bg-gray-50">
+        <div className="h-full flex items-center justify-center">
+          {generatedImage && rawImageUrl ? (
+            <div className="w-full max-w-4xl">
+              <BeforeAfterSliderComponent 
+                beforeImage={rawImageUrl} 
+                afterImage={generatedImage} 
+              />
+            </div>
+          ) : isLoading ? (
+            <div className="w-full max-w-4xl flex flex-col items-center justify-center p-6">
               <TextLoader 
                 messages={loadingMessages}
                 interval={3000}
@@ -162,25 +195,17 @@ function CreateNew() {
                 direction="vertical"
               />
             </div>
-          )}
-
-          {/* Display the generated image */}
-          {generatedImage && rawImageUrl && !isLoading && (
-            <div className="mt-6">
-              <h3 className="text-lg font-semibold mb-2">Before and After:</h3>
-              <BeforeAfterSliderComponent 
-                beforeImage={rawImageUrl} 
-                afterImage={generatedImage} 
-              />
+          ) : (
+            <div className="w-full max-w-4xl flex flex-col items-center justify-center p-6">
+              <MdPhotoLibrary className="w-10 h-10 text-gray-500 justify-center items-center" />
+              <div className="text-center">         
+                <h1 className="text-xl font-bold">Generated renders will appear here</h1>
+                <p className="text-gray-500 text-sm mt-2">
+                  Ready to bring your vision to life? Get started above to create your own custom renders.
+                </p>
+              </div>
             </div>
           )}
-
-          {/* Display error message */}
-          {error && (
-            <p className="text-red-500 text-sm mt-4">{error}</p>
-          )}
-
-          <p className='text-sm text-gray-400 mb-52'>NOTE: 1 credit will be used to redesign your room</p>
         </div>
       </div>
     </div>

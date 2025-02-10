@@ -7,7 +7,7 @@ function DashboardLayout({ children }: { children: ReactNode }) {
   return (
     <div>
         <Header/>
-        <div className='pt-20 px-10 md:px-10 lg:px-40 xl:px-60'>    
+        <div className="px-3 md:px-10">    
             {children} </div>
 
     </div>
