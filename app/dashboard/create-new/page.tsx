@@ -13,6 +13,13 @@ import { TextLoader } from './_components/CustomLoading';
 import BeforeAfterSliderComponent from './_components/BeforeAfterSlider';
 import { MdPhotoLibrary } from 'react-icons/md';
 import { useUser } from "@clerk/nextjs";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
+
+interface GeneratedResult {
+  generatedImage: string;
+  rawImage: string;
+  timestamp: number;
+}
 
 function CreateNew() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null); // Store the selected file
@@ -26,7 +33,10 @@ function CreateNew() {
   const [generatedImage, setGeneratedImage] = useState<string | null>(null); // Generated image URL
   const [error, setError] = useState<string | null>(null); // Error message
   const [rawImageUrl, setRawImageUrl] = useState<string | null>(null); // Raw image URL
+  const [showSlider, setShowSlider] = useState(false); // Add this state
   const { user } = useUser();
+  const [generatedResults, setGeneratedResults] = useState<GeneratedResult[]>([]);
+  const [activeSlider, setActiveSlider] = useState<GeneratedResult | null>(null);
 
   // Add an array of loading messages
   const loadingMessages = [
@@ -98,12 +108,9 @@ function CreateNew() {
       setIsLoading(true);
       setError(null);
 
-      // Step 1: Save the raw image to Supabase and get the public URL
       const rawImageUrl = await saveRawImageToSupabase(selectedFile);
       setRawImageUrl(rawImageUrl);
-      console.log('Raw image uploaded to Supabase. URL:', rawImageUrl);
 
-      // Step 2: Call the `/api/redesign-room` endpoint to generate the AI image
       const result = await axios.post('/api/redesign-room', {
         imageUrl: rawImageUrl,
         roomType: formData.room,
@@ -112,7 +119,14 @@ function CreateNew() {
         userEmail: user.emailAddresses[0].emailAddress
       });
 
-      // Step 3: Set the generated image URL
+      // Add new result to the array
+      const newResult = {
+        generatedImage: result.data.result,
+        rawImage: rawImageUrl,
+        timestamp: Date.now()
+      };
+
+      setGeneratedResults(prev => [...prev.slice(-3), newResult]); // Keep only last 4 results
       setGeneratedImage(result.data.result);
       toast.success('Room redesigned successfully!');
     } catch (error) {
@@ -122,6 +136,17 @@ function CreateNew() {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  // Helper function to get grid position classes
+  const getGridPositionClasses = (index: number) => {
+    const positions = [
+      "col-start-1 row-start-1", // First image (top left)
+      "col-start-2 row-start-1", // Second image (top right)
+      "col-start-1 row-start-2", // Third image (bottom left)
+      "col-start-2 row-start-2", // Fourth image (bottom right)
+    ];
+    return positions[index] || positions[0];
   };
 
   return (
@@ -176,19 +201,52 @@ function CreateNew() {
         </div>
       </div>
 
-      {/* Right Content Area - Full width on mobile */}
+      {/* Right Content Area - Modified */}
       <div className="flex-1 p-4 md:p-8 bg-gray-50">
         <div className="h-full flex items-center justify-center">
-          {generatedImage && rawImageUrl ? (
-            <div className="w-full max-w-4xl">
-              <BeforeAfterSliderComponent 
-                beforeImage={rawImageUrl} 
-                afterImage={generatedImage} 
-              />
-            </div>
+          {generatedResults.length > 0 ? (
+            <>
+              <div className="w-full max-w-4xl">
+                <div className="grid grid-cols-2 gap-4">
+                  {generatedResults.map((result, index) => (
+                    <div
+                      key={result.timestamp}
+                      className={`${getGridPositionClasses(index)} relative cursor-pointer hover:opacity-90 transition-opacity`}
+                      onClick={() => setActiveSlider(result)}
+                    >
+                      <div className="relative rounded-lg overflow-hidden aspect-video">
+                        <img
+                          src={result.generatedImage}
+                          alt={`Generated room ${index + 1}`}
+                          className="w-full h-full object-cover"
+                        />
+                        <div className="absolute bottom-4 left-4 bg-black/70 text-white px-3 py-1 rounded-full text-sm">
+                          Click to compare
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Dialog for Before/After Slider */}
+              <Dialog 
+                open={activeSlider !== null} 
+                onOpenChange={() => setActiveSlider(null)}
+              >
+                <DialogContent className="max-w-5xl w-full p-0">
+                  {activeSlider && (
+                    <BeforeAfterSliderComponent
+                      beforeImage={activeSlider.rawImage}
+                      afterImage={activeSlider.generatedImage}
+                    />
+                  )}
+                </DialogContent>
+              </Dialog>
+            </>
           ) : isLoading ? (
             <div className="w-full max-w-4xl flex flex-col items-center justify-center p-6">
-              <TextLoader 
+              <TextLoader
                 messages={loadingMessages}
                 interval={3000}
                 dotCount={3}
@@ -198,7 +256,7 @@ function CreateNew() {
           ) : (
             <div className="w-full max-w-4xl flex flex-col items-center justify-center p-6">
               <MdPhotoLibrary className="w-10 h-10 text-gray-500 justify-center items-center" />
-              <div className="text-center">         
+              <div className="text-center">
                 <h1 className="text-xl font-bold">Generated renders will appear here</h1>
                 <p className="text-gray-500 text-sm mt-2">
                   Ready to bring your vision to life? Get started above to create your own custom renders.
