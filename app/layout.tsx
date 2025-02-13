@@ -1,7 +1,7 @@
 import { Metadata } from "next";
 import "../app/globals.css";
 import { Poppins } from "next/font/google";
-import { ClerkProvider, SignedIn, SignedOut, SignInButton, UserButton } from "@clerk/nextjs";
+import { ClerkProvider } from "@clerk/nextjs";
 
 const poppins = Poppins({
   weight: ["400", "700"],
@@ -22,7 +22,7 @@ export default function RootLayout({
     <ClerkProvider>
       <html lang="en">
         <body className={`${poppins.className} antialiased`}>
-                {children}
+          {children}
         </body>
       </html>
     </ClerkProvider>

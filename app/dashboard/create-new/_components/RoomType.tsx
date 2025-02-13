@@ -1,34 +1,41 @@
-import React from 'react';
+import React from 'react'
+import { roomTypes } from '@/lib/utils'
 import {
   Select,
-  SelectTrigger,
-  SelectValue,
   SelectContent,
   SelectItem,
-} from '@/components/ui/select';
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 
 interface RoomTypeProps {
   selectedRoomType: (value: string) => void;
 }
 
+interface RoomType {
+  value: string;
+  label: string;
+  image: string;
+}
+
 function RoomType({ selectedRoomType }: RoomTypeProps) {
   return (
-    <div className="space-y-1">
-      <label className="text-sm font-medium text-gray-700">Room Type</label>
-      <Select onValueChange={(value) => selectedRoomType(value)}>
-        <SelectTrigger className="w-full h-9">
+    <div className="space-y-2 px-8 py-4">
+      <h2 className="text-xl font-semibold text-gray-900 mb-4">Select Room Type</h2>
+      <Select onValueChange={selectedRoomType}>
+        <SelectTrigger className="font-bold">
           <SelectValue placeholder="Select a room type" />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value="living-room">Living Room</SelectItem>
-          <SelectItem value="bedroom">Bedroom</SelectItem>
-          <SelectItem value="kitchen">Kitchen</SelectItem>
-          <SelectItem value="office">Office</SelectItem>
-          <SelectItem value="bathroom">Bathroom</SelectItem>
+          {roomTypes.map((room: RoomType) => (
+            <SelectItem key={room.value} value={room.value}>
+              {room.label}
+            </SelectItem>
+          ))}
         </SelectContent>
       </Select>
     </div>
-  );
+  )
 }
 
-export default RoomType;
+export default RoomType

@@ -3,15 +3,15 @@ import React, {useState} from 'react'
 import { Button } from "@/components/ui/button"
 import EmptyState from './EmptyState'
 import Link from 'next/link'
-function Listing() {
 
+function Listing() {
     const [userRoomList, setuserRoomList] = useState([]);
   return (
     <div>
       <div className='flex items-center justify-between'>
-        <h2 className='font-bold text-3xl'>Hello ,</h2>
+        <h2 className='font-bold text-3xl text-gray-900'>Hello,</h2>
         <Link href='/dashboard/create-new'>
-        <Button> Redesign Room</Button>
+          <Button className="bg-primary hover:bg-primary/90">Redesign Room</Button>
         </Link>
       </div>
 

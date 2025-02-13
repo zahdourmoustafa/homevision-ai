@@ -22,23 +22,22 @@ interface GeneratedResult {
 }
 
 function CreateNew() {
-  const [selectedFile, setSelectedFile] = useState<File | null>(null); // Store the selected file
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [formData, setFormData] = useState({
-    image: '', // Store the image URL here
+    image: '',
     room: '',
     design: '',
     additionalRequirement: ''
   });
-  const [isLoading, setIsLoading] = useState(false); // Loading state for the entire process
-  const [generatedImage, setGeneratedImage] = useState<string | null>(null); // Generated image URL
-  const [error, setError] = useState<string | null>(null); // Error message
-  const [rawImageUrl, setRawImageUrl] = useState<string | null>(null); // Raw image URL
-  const [showSlider, setShowSlider] = useState(false); // Add this state
+  const [isLoading, setIsLoading] = useState(false);
+  const [generatedImage, setGeneratedImage] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [rawImageUrl, setRawImageUrl] = useState<string | null>(null);
+  const [showSlider, setShowSlider] = useState(false);
   const { user } = useUser();
   const [generatedResults, setGeneratedResults] = useState<GeneratedResult[]>([]);
   const [activeSlider, setActiveSlider] = useState<GeneratedResult | null>(null);
 
-  // Add an array of loading messages
   const loadingMessages = [
     "Analyzing your room...",
     "Applying design style...",
@@ -47,7 +46,6 @@ function CreateNew() {
     "Almost there..."
   ];
 
-  // Handle form input changes
   const onHandleInputChanged = (value: string, fieldName: string) => {
     setFormData(prev => ({
       ...prev,
@@ -55,18 +53,13 @@ function CreateNew() {
     }));
   };
 
-  // Handle file selection
-  const handleFileSelected = (file: File) => {
-    setSelectedFile(file); // Store the selected file
+  const handleFileSelected = (file: File | null) => {
+    setSelectedFile(file);
   };
 
-  // Save the raw image to Supabase and return the public URL
   const saveRawImageToSupabase = async (file: File) => {
     try {
-      // Generate a unique file name
       const fileName = `${Date.now()}-${file.name}`;
-
-      // Upload the file to the `interior-images` bucket in Supabase Storage
       const { data, error } = await supabase.storage
         .from('interior-images')
         .upload(fileName, file);
@@ -75,7 +68,6 @@ function CreateNew() {
         throw error;
       }
 
-      // Get the public URL of the uploaded file
       const { data: publicUrlData } = supabase.storage
         .from('interior-images')
         .getPublicUrl(data.path);
@@ -87,7 +79,6 @@ function CreateNew() {
     }
   };
 
-  // Generate the AI image using the Replicate API
   const generateAiImage = async () => {
     if (!selectedFile) {
       toast.error('Please upload an image first.');
@@ -119,14 +110,13 @@ function CreateNew() {
         userEmail: user.emailAddresses[0].emailAddress
       });
 
-      // Add new result to the array
       const newResult = {
         generatedImage: result.data.result,
         rawImage: rawImageUrl,
         timestamp: Date.now()
       };
 
-      setGeneratedResults(prev => [...prev.slice(-3), newResult]); // Keep only last 4 results
+      setGeneratedResults(prev => [...prev.slice(-3), newResult]);
       setGeneratedImage(result.data.result);
       toast.success('Room redesigned successfully!');
     } catch (error) {
@@ -138,70 +128,61 @@ function CreateNew() {
     }
   };
 
-  // Helper function to get grid position classes
   const getGridPositionClasses = (index: number) => {
     const positions = [
-      "col-start-1 row-start-1", // First image (top left)
-      "col-start-2 row-start-1", // Second image (top right)
-      "col-start-1 row-start-2", // Third image (bottom left)
-      "col-start-2 row-start-2", // Fourth image (bottom right)
+      "col-start-1 row-start-1",
+      "col-start-2 row-start-1",
+      "col-start-1 row-start-2",
+      "col-start-2 row-start-2",
     ];
     return positions[index] || positions[0];
   };
 
   return (
     <div className="flex flex-col md:flex-row min-h-screen bg-gray-50">
-      {/* Left Sidebar - Full width on mobile */}
       <div className="w-full md:w-[600px] border-b md:border-b-0 md:border-r bg-white p-3">
-        <div className="space-y-4">
-          {/* Room Style Title Section */}
-          <div className="space-y-1">
+        <div className="space-y-4 pt-4">
+          <div className="space-y-1 px-4">
             <h2 className="text-xl font-semibold">Room Style</h2>
             <p className="text-xs text-gray-500">
               Replace the theme of your space with 20+ curated styles
             </p>
           </div>
 
-          {/* Image Selection */}
           <div className="space-y-1">
-            <label className="text-sm font-medium text-gray-700">Room Photo</label>
             <ImageSelection onFileSelected={handleFileSelected} />
           </div>
 
-          {/* Room Type Selection */}
           <div className="space-y-1">
             <RoomType selectedRoomType={(value) => onHandleInputChanged(value, "room")} />
           </div>
 
-          {/* Design Style Selection */}
           <div className="space-y-1">
             <DesignType selectedDesign={(value) => onHandleInputChanged(value, "design")} />
           </div>
 
-          {/* Additional Requirements - Optional, can be removed if space is tight */}
           <div className="space-y-1">
             <AdditionalReq AdditionalReq={(value) => onHandleInputChanged(value, "additionalRequirement")} />
           </div>
 
-          {/* Generate Button */}
-          <Button 
-            onClick={generateAiImage}
-            disabled={isLoading || !selectedFile || !formData.room || !formData.design}
-            className="w-full bg-blue-600 hover:bg-blue-700 text-white h-9"
-          >
-            {isLoading ? 'Redesigning...' : 'Redesign Room'}
-          </Button>
+          <div className="px-8">
+            <Button 
+              onClick={generateAiImage}
+              disabled={isLoading || !selectedFile || !formData.room || !formData.design}
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white h-9"
+            >
+              {isLoading ? 'Redesigning...' : 'Redesign Room'}
+            </Button>
 
-          {/* Error Message */}
-          {error && (
-            <p className="text-red-500 text-xs mt-1">{error}</p>
-          )}
+            {error && (
+              <p className="text-red-500 text-xs mt-1">{error}</p>
+            )}
 
-          <p className='text-xs text-gray-400'>NOTE: 1 credit will be used to redesign your room</p>
+            <p className='text-xs text-gray-400 mt-2'>NOTE: 1 credit will be used to redesign your room</p>
+          </div>
         </div>
       </div>
 
-      {/* Right Content Area - Modified */}
       <div className="flex-1 p-4 md:p-8 bg-gray-50">
         <div className="h-full flex items-center justify-center">
           {generatedResults.length > 0 ? (
@@ -229,7 +210,6 @@ function CreateNew() {
                 </div>
               </div>
 
-              {/* Dialog for Before/After Slider */}
               <Dialog 
                 open={activeSlider !== null} 
                 onOpenChange={() => setActiveSlider(null)}
