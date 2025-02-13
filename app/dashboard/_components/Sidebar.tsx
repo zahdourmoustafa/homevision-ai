@@ -5,14 +5,16 @@ import { cn } from "@/lib/utils";
 import Link from "next/link";
 import { useClerk } from "@clerk/nextjs";
 import Image from "next/image";
+import { usePathname } from "next/navigation";
 
 const menuItems = [
-  { icon: Home, label: "Dashboard", active: true, href: "/dashboard" },
+  { icon: Home, label: "Dashboard", href: "/dashboard" },
   { icon: Star, label: "Favorites", href: "/dashboard/favorites" },
 ];
 
 export function Sidebar() {
   const { openUserProfile, signOut } = useClerk();
+  const pathname = usePathname();
   
   return (
     <div className="w-64 h-screen bg-white p-4 fixed left-0 top-0 border-r border-gray-100 z-40">
@@ -31,7 +33,7 @@ export function Sidebar() {
               href={item.href}
               className={cn(
                 "w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors",
-                item.active
+                pathname === item.href
                   ? "bg-primary text-white"
                   : "text-gray-600 hover:bg-gray-50"
               )}
