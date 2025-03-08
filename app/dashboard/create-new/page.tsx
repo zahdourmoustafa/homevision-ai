@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import axios from "axios";
@@ -28,6 +28,96 @@ interface GeneratedResult {
   rawImage: string;
   timestamp: number;
 }
+
+// Add custom hook for image loading with retries
+const useImageWithRetry = (src: string, maxRetries = 3) => {
+  const [imageSrc, setImageSrc] = useState<string>(src);
+  const [status, setStatus] = useState<"loading" | "success" | "error">(
+    "loading"
+  );
+  const [retries, setRetries] = useState(0);
+
+  useEffect(() => {
+    if (!src) {
+      setStatus("error");
+      return;
+    }
+
+    // Reset status when source changes
+    setStatus("loading");
+    setRetries(0);
+    setImageSrc(src);
+  }, [src]);
+
+  const handleImageError = () => {
+    if (retries < maxRetries) {
+      console.log(`Retrying image load (${retries + 1}/${maxRetries}): ${src}`);
+      // Add cache-busting parameter
+      const newSrc = `${src}?retry=${Date.now()}`;
+      setImageSrc(newSrc);
+      setRetries((prev) => prev + 1);
+    } else {
+      console.error(`Failed to load image after ${maxRetries} retries:`, src);
+      setStatus("error");
+    }
+  };
+
+  const handleImageLoad = () => {
+    setStatus("success");
+  };
+
+  return { imageSrc, status, handleImageError, handleImageLoad };
+};
+
+// Create a robust image component with error handling
+const RobustImage = ({
+  src,
+  alt,
+  className = "",
+}: {
+  src: string;
+  alt: string;
+  className?: string;
+}) => {
+  const { imageSrc, status, handleImageError, handleImageLoad } =
+    useImageWithRetry(src);
+
+  if (status === "error") {
+    return (
+      <div className="w-full h-full flex flex-col items-center justify-center bg-gray-100 p-4">
+        <MdPhotoLibrary className="w-10 h-10 text-gray-400 mb-2" />
+        <p className="text-sm text-gray-500 text-center">
+          Image could not be loaded
+        </p>
+        <button
+          className="mt-2 px-3 py-1 text-xs bg-gray-200 hover:bg-gray-300 rounded-md transition-colors"
+          onClick={() => window.location.reload()}
+        >
+          Refresh
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="relative w-full h-full">
+      <Image
+        src={imageSrc}
+        alt={alt}
+        fill
+        className={`object-cover ${className}`}
+        sizes="(max-width: 768px) 100vw, 400px"
+        onLoad={handleImageLoad}
+        onError={handleImageError}
+      />
+      {status === "loading" && (
+        <div className="absolute inset-0 flex items-center justify-center bg-gray-100 bg-opacity-50">
+          <div className="w-8 h-8 border-2 border-gray-300 border-t-gray-600 rounded-full animate-spin"></div>
+        </div>
+      )}
+    </div>
+  );
+};
 
 function CreateNew() {
   // State management
@@ -151,21 +241,66 @@ function CreateNew() {
     try {
       setIsLoading(true);
       const rawImageUrl = await saveRawImageToSupabase(selectedFile);
-      const result = await axios.post("/api/redesign-room", {
+
+      // Prepare the request payload
+      const payload = {
         imageUrl: rawImageUrl,
         userEmail: user.emailAddresses[0].emailAddress,
         roomType,
         design: designType,
         additionalRequirement: additionalReq,
         creativityLevel: aiCreativity,
-      });
+      };
 
-      // Log the API response to debug
-      console.log("API Response:", result.data);
+      console.log("Sending request to API with payload:", payload);
 
-      // Fix the data structure access
-      const generatedImageUrl =
-        result.data.result?.generated || result.data.result;
+      // Try the API call with retries
+      let result;
+      let retryCount = 0;
+      const maxRetries = 2;
+
+      while (retryCount <= maxRetries) {
+        try {
+          // Add a cache-busting parameter to prevent caching issues
+          const timestamp = Date.now();
+          result = await axios.post(
+            `/api/redesign-room?t=${timestamp}`,
+            payload
+          );
+          console.log("API Response:", result.data);
+          break; // Success, exit the retry loop
+        } catch (apiError) {
+          console.error(`API call attempt ${retryCount + 1} failed:`, apiError);
+
+          if (retryCount === maxRetries) {
+            throw apiError; // Rethrow if we've exhausted retries
+          }
+
+          // Wait before retrying (exponential backoff)
+          await new Promise((resolve) =>
+            setTimeout(resolve, 1000 * (retryCount + 1))
+          );
+          retryCount++;
+        }
+      }
+
+      // Fix the data structure access with additional null checks
+      let generatedImageUrl = null;
+      if (result && result.data) {
+        if (
+          result.data.result &&
+          typeof result.data.result === "object" &&
+          result.data.result.generated
+        ) {
+          generatedImageUrl = result.data.result.generated;
+        } else if (result.data.result) {
+          generatedImageUrl = result.data.result;
+        }
+      }
+
+      if (!generatedImageUrl) {
+        throw new Error("No valid image URL found in the API response");
+      }
 
       const newResult = {
         generatedImage: generatedImageUrl,
@@ -173,10 +308,35 @@ function CreateNew() {
         timestamp: Date.now(),
       };
 
-      setGeneratedResults((prev) => [...prev.slice(-3), newResult]);
+      // Add the new image to the BEGINNING of the array instead of the end
+      setGeneratedResults((prev) => [newResult, ...prev].slice(0, 4));
+
       toast.success("Room redesigned successfully!");
     } catch (error) {
       console.error("Error generating AI image:", error);
+
+      // Provide a more helpful error message to the user
+      if (axios.isAxiosError(error) && error.response) {
+        if (error.response.status === 404) {
+          toast.error(
+            "The design service is temporarily unavailable. Please try again in a few moments."
+          );
+        } else if (error.response.status === 429) {
+          toast.error(
+            "Too many requests. Please wait a moment before trying again."
+          );
+        } else {
+          toast.error(
+            `Error: ${
+              error.response.data?.error ||
+              error.message ||
+              "Something went wrong"
+            }`
+          );
+        }
+      } else {
+        toast.error("Failed to generate design. Please try again.");
+      }
     } finally {
       setIsLoading(false);
     }
@@ -207,7 +367,6 @@ function CreateNew() {
               >
                 {preview ? (
                   <div className="relative w-full h-[200px]">
-                    {/* Only render Image when preview is available */}
                     {typeof preview === "string" && preview.trim() !== "" && (
                       <Image
                         src={preview}
@@ -383,220 +542,106 @@ function CreateNew() {
 
         {/* Right panel - Results */}
         <div className="flex-1 p-2 flex items-center justify-center bg-gray-50">
-          {isLoading ? (
-            <div className="w-full h-full flex flex-col items-center justify-center">
-              <TextLoader
-                messages={loadingMessages}
-                interval={3000}
-                dotCount={3}
-                direction="vertical"
-              />
+          {generatedResults.length > 0 || isLoading ? (
+            // Always show the grid when we have generated images or are loading
+            <div className="w-full h-full">
+              {/* Always use a 2x2 grid layout */}
+              <div className="grid grid-cols-2 grid-rows-2 gap-2 h-full">
+                {/* Top Left - Loading State or Newest Image - always visible if loading or if image exists */}
+                {(isLoading || generatedResults[0]) && (
+                  <div className="relative bg-white rounded-sm overflow-hidden shadow-sm">
+                    {isLoading ? (
+                      <div className="w-full h-full flex flex-col items-center justify-center p-4 bg-gray-50">
+                        <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
+                          <MdPhotoLibrary className="w-8 h-8 text-gray-400" />
+                        </div>
+                        <h3 className="text-lg font-medium text-gray-700 mb-2">
+                          Crafting Your Visualization
+                        </h3>
+                        <div className="w-full max-w-xs bg-gray-200 h-2 rounded-full mt-2 overflow-hidden">
+                          <div
+                            className="h-full bg-orange-500 rounded-full animate-pulse"
+                            style={{ width: "65%" }}
+                          ></div>
+                        </div>
+                      </div>
+                    ) : generatedResults[0] ? (
+                      <RobustImage
+                        src={generatedResults[0].generatedImage}
+                        alt="Latest design"
+                      />
+                    ) : null}
+                  </div>
+                )}
+
+                {/* Top Right - First Image when loading or Second Newest Image - only visible if has content */}
+                {((isLoading && generatedResults[0]) ||
+                  (!isLoading && generatedResults[1])) && (
+                  <div className="relative bg-white rounded-sm overflow-hidden shadow-sm">
+                    {isLoading && generatedResults[0] ? (
+                      <RobustImage
+                        src={generatedResults[0].generatedImage}
+                        alt="Previous design"
+                      />
+                    ) : generatedResults[1] ? (
+                      <RobustImage
+                        src={generatedResults[1].generatedImage}
+                        alt="Previous design"
+                      />
+                    ) : null}
+                  </div>
+                )}
+
+                {/* Bottom Left - Second image when loading or Third Newest Image - only visible if has content */}
+                {((isLoading && generatedResults[1]) ||
+                  (!isLoading && generatedResults[2])) && (
+                  <div className="relative bg-white rounded-sm overflow-hidden shadow-sm">
+                    {isLoading && generatedResults[1] ? (
+                      <RobustImage
+                        src={generatedResults[1].generatedImage}
+                        alt="Older design"
+                      />
+                    ) : generatedResults[2] ? (
+                      <RobustImage
+                        src={generatedResults[2].generatedImage}
+                        alt="Older design"
+                      />
+                    ) : null}
+                  </div>
+                )}
+
+                {/* Bottom Right - Third image when loading or Fourth Newest Image - only visible if has content */}
+                {((isLoading && generatedResults[2]) ||
+                  (!isLoading && generatedResults[3])) && (
+                  <div className="relative bg-white rounded-sm overflow-hidden shadow-sm">
+                    {isLoading && generatedResults[2] ? (
+                      <RobustImage
+                        src={generatedResults[2].generatedImage}
+                        alt="Oldest design"
+                      />
+                    ) : generatedResults[3] ? (
+                      <RobustImage
+                        src={generatedResults[3].generatedImage}
+                        alt="Oldest design"
+                      />
+                    ) : null}
+                  </div>
+                )}
+              </div>
             </div>
           ) : (
-            <div className="w-full h-full">
-              {/* 2x2 Grid for generated images - Fills entire right side */}
-              <div className="grid grid-cols-2 grid-rows-2 gap-2 h-full">
-                {/* Top Left Cell (First generated image) */}
-                <div className="relative bg-white rounded-sm overflow-hidden shadow-sm">
-                  {generatedResults.length > 0 && generatedResults[0] ? (
-                    <React.Fragment>
-                      {(() => {
-                        console.log(
-                          "Image 1 URL:",
-                          generatedResults[0]?.generatedImage
-                        );
-                        return null;
-                      })()}
-
-                      {generatedResults[0]?.generatedImage &&
-                      typeof generatedResults[0].generatedImage === "string" &&
-                      generatedResults[0].generatedImage.trim() !== "" ? (
-                        <Image
-                          src={generatedResults[0].generatedImage}
-                          alt="Generated design 1"
-                          fill
-                          className="object-cover"
-                          sizes="(max-width: 768px) 100vw, 400px"
-                          onError={(e) => {
-                            console.error(
-                              "Image failed to load:",
-                              generatedResults[0].generatedImage
-                            );
-                            e.currentTarget.style.display = "none";
-                          }}
-                        />
-                      ) : preview && generatedResults.length === 0 ? (
-                        // Show preview in first cell if no generations yet
-                        <Image
-                          src={preview}
-                          alt="Room preview"
-                          fill
-                          className="object-cover"
-                          sizes="(max-width: 768px) 100vw, 400px"
-                        />
-                      ) : (
-                        <div className="w-full h-full flex flex-col items-center justify-center p-4">
-                          <MdPhotoLibrary className="w-8 h-8 text-gray-200" />
-                          <p className="text-xs text-gray-400 text-center mt-2">
-                            Image 1
-                          </p>
-                        </div>
-                      )}
-                    </React.Fragment>
-                  ) : (
-                    <div className="w-full h-full flex flex-col items-center justify-center p-4">
-                      <MdPhotoLibrary className="w-8 h-8 text-gray-200" />
-                      <p className="text-xs text-gray-400 text-center mt-2">
-                        Design 1
-                      </p>
-                    </div>
-                  )}
-                </div>
-
-                {/* Top Right Cell (Second generated image) */}
-                <div className="relative bg-white rounded-sm overflow-hidden shadow-sm">
-                  {generatedResults.length > 1 && generatedResults[1] ? (
-                    <React.Fragment>
-                      {(() => {
-                        console.log(
-                          "Image 2 URL:",
-                          generatedResults[1]?.generatedImage
-                        );
-                        return null;
-                      })()}
-
-                      {generatedResults[1]?.generatedImage &&
-                      typeof generatedResults[1].generatedImage === "string" &&
-                      generatedResults[1].generatedImage.trim() !== "" ? (
-                        <Image
-                          src={generatedResults[1].generatedImage}
-                          alt="Generated design 2"
-                          fill
-                          className="object-cover"
-                          sizes="(max-width: 768px) 100vw, 400px"
-                          onError={(e) => {
-                            console.error(
-                              "Image failed to load:",
-                              generatedResults[1].generatedImage
-                            );
-                            e.currentTarget.style.display = "none";
-                          }}
-                        />
-                      ) : (
-                        <div className="w-full h-full flex flex-col items-center justify-center p-4">
-                          <MdPhotoLibrary className="w-8 h-8 text-gray-200" />
-                          <p className="text-xs text-gray-400 text-center mt-2">
-                            Design 2
-                          </p>
-                        </div>
-                      )}
-                    </React.Fragment>
-                  ) : (
-                    <div className="w-full h-full flex flex-col items-center justify-center p-4">
-                      <MdPhotoLibrary className="w-8 h-8 text-gray-200" />
-                      <p className="text-xs text-gray-400 text-center mt-2">
-                        Design 2
-                      </p>
-                    </div>
-                  )}
-                </div>
-
-                {/* Bottom Left Cell (Third generated image) */}
-                <div className="relative bg-white rounded-sm overflow-hidden shadow-sm">
-                  {generatedResults.length > 2 && generatedResults[2] ? (
-                    <React.Fragment>
-                      {(() => {
-                        console.log(
-                          "Image 3 URL:",
-                          generatedResults[2]?.generatedImage
-                        );
-                        return null;
-                      })()}
-
-                      {generatedResults[2]?.generatedImage &&
-                      typeof generatedResults[2].generatedImage === "string" &&
-                      generatedResults[2].generatedImage.trim() !== "" ? (
-                        <Image
-                          src={generatedResults[2].generatedImage}
-                          alt="Generated design 3"
-                          fill
-                          className="object-cover"
-                          sizes="(max-width: 768px) 100vw, 400px"
-                          onError={(e) => {
-                            console.error(
-                              "Image failed to load:",
-                              generatedResults[2].generatedImage
-                            );
-                            e.currentTarget.style.display = "none";
-                          }}
-                        />
-                      ) : (
-                        <div className="w-full h-full flex flex-col items-center justify-center p-4">
-                          <MdPhotoLibrary className="w-8 h-8 text-gray-200" />
-                          <p className="text-xs text-gray-400 text-center mt-2">
-                            Design 3
-                          </p>
-                        </div>
-                      )}
-                    </React.Fragment>
-                  ) : (
-                    <div className="w-full h-full flex flex-col items-center justify-center p-4">
-                      <MdPhotoLibrary className="w-8 h-8 text-gray-200" />
-                      <p className="text-xs text-gray-400 text-center mt-2">
-                        Design 3
-                      </p>
-                    </div>
-                  )}
-                </div>
-
-                {/* Bottom Right Cell (Fourth generated image) */}
-                <div className="relative bg-white rounded-sm overflow-hidden shadow-sm">
-                  {generatedResults.length > 3 && generatedResults[3] ? (
-                    <React.Fragment>
-                      {(() => {
-                        console.log(
-                          "Image 4 URL:",
-                          generatedResults[3]?.generatedImage
-                        );
-                        return null;
-                      })()}
-
-                      {generatedResults[3]?.generatedImage &&
-                      typeof generatedResults[3].generatedImage === "string" &&
-                      generatedResults[3].generatedImage.trim() !== "" ? (
-                        <Image
-                          src={generatedResults[3].generatedImage}
-                          alt="Generated design 4"
-                          fill
-                          className="object-cover"
-                          sizes="(max-width: 768px) 100vw, 400px"
-                          onError={(e) => {
-                            console.error(
-                              "Image failed to load:",
-                              generatedResults[3].generatedImage
-                            );
-                            e.currentTarget.style.display = "none";
-                          }}
-                        />
-                      ) : (
-                        <div className="w-full h-full flex flex-col items-center justify-center p-4">
-                          <MdPhotoLibrary className="w-8 h-8 text-gray-200" />
-                          <p className="text-xs text-gray-400 text-center mt-2">
-                            Design 4
-                          </p>
-                        </div>
-                      )}
-                    </React.Fragment>
-                  ) : (
-                    <div className="w-full h-full flex flex-col items-center justify-center p-4">
-                      <MdPhotoLibrary className="w-8 h-8 text-gray-200" />
-                      <p className="text-xs text-gray-400 text-center mt-2">
-                        Design 4
-                      </p>
-                    </div>
-                  )}
-                </div>
+            // Clean, minimal placeholder when no images are generated
+            <div className="w-full h-full flex flex-col items-center justify-center text-center p-6">
+              <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
+                <MdPhotoLibrary className="w-8 h-8 text-gray-400" />
               </div>
+              <h2 className="text-xl font-medium text-gray-700 mb-2">
+                Generated renders will appear here
+              </h2>
+              <p className="text-gray-500 text-sm max-w-md">
+                Ready to bring your vision to life? Get started on the left to
+                create your own custom renders.
+              </p>
             </div>
           )}
         </div>
