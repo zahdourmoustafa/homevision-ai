@@ -19,7 +19,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { FiUpload } from "react-icons/fi";
+import { FiUpload, FiCheck, FiZoomIn, FiX } from "react-icons/fi";
 import { roomTypes } from "@/lib/utils";
 
 // Interface for the generated result
@@ -106,7 +106,8 @@ const RobustImage = ({
         alt={alt}
         fill
         className={`object-cover ${className}`}
-        sizes="(max-width: 768px) 100vw, 400px"
+        sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+        priority
         onLoad={handleImageLoad}
         onError={handleImageError}
       />
@@ -131,10 +132,69 @@ function CreateNew() {
     null
   );
   const [roomType, setRoomType] = useState<string>("");
+  const [selectedDesignTypes, setSelectedDesignTypes] = useState<string[]>([]);
   const [designType, setDesignType] = useState<string>("");
   const [additionalReq, setAdditionalReq] = useState<string>("");
   const [aiCreativity, setAiCreativity] = useState<number>(50); // Default to middle value
   const { user } = useUser();
+  // Add new state for the image modal
+  const [modalImage, setModalImage] = useState<string | null>(null);
+
+  // Design styles data with images
+  const designStyles = [
+    { value: "Modern", label: "Modern", image: "/images/styles/modern.jpg" },
+    { value: "Summer", label: "Summer", image: "/images/styles/summer.jpg" },
+    {
+      value: "Professional",
+      label: "Professional",
+      image: "/images/styles/professional.jpg",
+    },
+    {
+      value: "Tropical",
+      label: "Tropical",
+      image: "/images/styles/tropical.jpg",
+    },
+    { value: "Coastal", label: "Coastal", image: "/images/styles/coastal.jpg" },
+    { value: "Vintage", label: "Vintage", image: "/images/styles/vintage.jpg" },
+    {
+      value: "Industrial",
+      label: "Industrial",
+      image: "/images/styles/industrial.jpg",
+    },
+    {
+      value: "Neoclassic",
+      label: "Neoclassic",
+      image: "/images/styles/neoclassic.jpg",
+    },
+    { value: "Tribal", label: "Tribal", image: "/images/styles/tribal.jpg" },
+  ];
+
+  // Toggle design style selection
+  const toggleDesignStyle = (style: string) => {
+    setSelectedDesignTypes((prev) => {
+      // If already selected, remove it
+      if (prev.includes(style)) {
+        return prev.filter((s) => s !== style);
+      }
+      // If not selected and we have less than 4 selected, add it
+      if (prev.length < 4) {
+        return [...prev, style];
+      }
+      // If we already have 4 selected, show a toast and don't add
+      toast.info("You can select up to 4 design styles");
+      return prev;
+    });
+  };
+
+  // Transform selected design types to a single string for the API
+  useEffect(() => {
+    // Update the design type for backward compatibility with the API
+    if (selectedDesignTypes.length > 0) {
+      setDesignType(selectedDesignTypes.join(", "));
+    } else {
+      setDesignType("");
+    }
+  }, [selectedDesignTypes]);
 
   // Loading messages for the animation
   const loadingMessages = [
@@ -219,7 +279,8 @@ function CreateNew() {
   const generateAiImage = async () => {
     // Log the values to debug
     console.log("Room Type:", roomType);
-    console.log("Design Type:", designType);
+    console.log("Design Types:", selectedDesignTypes);
+    console.log("Design Type String:", designType);
     console.log("Additional Requirements:", additionalReq);
     console.log("AI Creativity Level:", aiCreativity);
 
@@ -233,8 +294,10 @@ function CreateNew() {
       return;
     }
 
-    if (!roomType || !designType) {
-      toast.error("Please select both room type and design style.");
+    if (!roomType || selectedDesignTypes.length === 0) {
+      toast.error(
+        "Please select both room type and at least one design style."
+      );
       return;
     }
 
@@ -248,6 +311,7 @@ function CreateNew() {
         userEmail: user.emailAddresses[0].emailAddress,
         roomType,
         design: designType,
+        designStyles: selectedDesignTypes,
         additionalRequirement: additionalReq,
         creativityLevel: aiCreativity,
       };
@@ -342,13 +406,23 @@ function CreateNew() {
     }
   };
 
+  // Function to open modal with specific image
+  const openImageModal = (imageUrl: string) => {
+    setModalImage(imageUrl);
+  };
+
+  // Function to close modal
+  const closeImageModal = () => {
+    setModalImage(null);
+  };
+
   return (
-    <div className="flex flex-col min-h-screen bg-white">
+    <div className="flex flex-col h-screen bg-white">
       {/* Main content area */}
-      <div className="flex-1 flex flex-col md:flex-row">
-        {/* Left panel - Controls */}
-        <div className="w-full md:w-[400px] p-4 md:border-r">
-          <div className="space-y-4">
+      <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
+        {/* Left panel - Controls - Make scrollable */}
+        <div className="w-full md:w-[400px] overflow-y-auto h-[calc(100vh-60px)] md:h-screen p-4 md:border-r">
+          <div className="space-y-4 pb-8">
             {/* Upload Image Section */}
             <div className="mb-6">
               <div className="text-lg font-medium flex items-center gap-2">
@@ -419,21 +493,6 @@ function CreateNew() {
               </TabsList>
 
               <TabsContent value="custom" className="space-y-4">
-                {/* Input Type */}
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Input Type</label>
-                  <Select>
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="-- Select a Type --" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="room">Room</SelectItem>
-                      <SelectItem value="exterior">Exterior</SelectItem>
-                      <SelectItem value="other">Other</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
                 {/* Room Type Selection */}
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Room Type</label>
@@ -451,22 +510,63 @@ function CreateNew() {
                   </Select>
                 </div>
 
-                {/* Design Style Selection */}
+                {/* Design Style Selection - REPLACED WITH GRID */}
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Design Style</label>
-                  <Select onValueChange={setDesignType}>
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="-- Select Design Style --" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Modern">Modern</SelectItem>
-                      <SelectItem value="Industrial">Industrial</SelectItem>
-                      <SelectItem value="Bohemian">Bohemian</SelectItem>
-                      <SelectItem value="Traditional">Traditional</SelectItem>
-                      <SelectItem value="Rustic">Rustic</SelectItem>
-                      <SelectItem value="Minimalist">Minimalist</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <label className="text-sm font-medium">
+                    Select Room Themes (up to 4)
+                  </label>
+                  <div className="grid grid-cols-3 gap-3 mt-2">
+                    {designStyles.map((style) => (
+                      <div
+                        key={style.value}
+                        onClick={() => toggleDesignStyle(style.value)}
+                        className="cursor-pointer flex flex-col items-center"
+                      >
+                        <div className="relative w-full aspect-square rounded-lg overflow-hidden border hover:border-gray-400 transition-all">
+                          {selectedDesignTypes.includes(style.value) && (
+                            <div className="absolute top-2 right-2 bg-white rounded-full w-5 h-5 flex items-center justify-center shadow-sm z-10">
+                              <FiCheck className="w-3 h-3 text-black" />
+                            </div>
+                          )}
+                          <div
+                            className={`absolute inset-0 ${
+                              selectedDesignTypes.includes(style.value)
+                                ? "ring-2 ring-blue-500"
+                                : ""
+                            }`}
+                          >
+                            <Image
+                              src={style.image}
+                              alt={style.label}
+                              fill
+                              className="object-cover"
+                              sizes="(max-width: 768px) 100px, 120px"
+                            />
+                          </div>
+                        </div>
+                        <span className="text-xs text-center mt-1.5 text-gray-700">
+                          {style.label}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="mt-1 flex items-center justify-between">
+                    <p className="text-xs text-gray-500">
+                      {selectedDesignTypes.length === 0
+                        ? "Select at least one theme"
+                        : `${selectedDesignTypes.length} theme${
+                            selectedDesignTypes.length > 1 ? "s" : ""
+                          } selected`}
+                    </p>
+                    {selectedDesignTypes.length > 0 && (
+                      <button
+                        onClick={() => setSelectedDesignTypes([])}
+                        className="text-xs text-blue-500 hover:underline"
+                      >
+                        Clear
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 {/* Custom Design Request (Additional Requirements) */}
@@ -525,7 +625,12 @@ function CreateNew() {
             {/* Visualize Button */}
             <Button
               onClick={generateAiImage}
-              disabled={isLoading || !selectedFile || !roomType || !designType}
+              disabled={
+                isLoading ||
+                !selectedFile ||
+                !roomType ||
+                selectedDesignTypes.length === 0
+              }
               className="w-full bg-black hover:bg-gray-800 text-white mt-4 h-12"
             >
               {isLoading ? "Visualizing..." : "Visualize"}
@@ -540,16 +645,16 @@ function CreateNew() {
           </div>
         </div>
 
-        {/* Right panel - Results */}
-        <div className="flex-1 p-2 flex items-center justify-center bg-gray-50">
+        {/* Right panel - Results - Keep fixed */}
+        <div className="flex-1 p-4 flex items-center justify-center bg-gray-50 h-[calc(100vh-60px)] md:h-screen">
           {generatedResults.length > 0 || isLoading ? (
             // Always show the grid when we have generated images or are loading
-            <div className="w-full h-full">
-              {/* Always use a 2x2 grid layout */}
-              <div className="grid grid-cols-2 grid-rows-2 gap-2 h-full">
+            <div className="w-full h-full flex items-center justify-center">
+              {/* Always use a 2x2 grid layout that fills the viewport */}
+              <div className="grid grid-cols-2 grid-rows-2 gap-2 w-full h-full max-h-[95vh] max-w-[95%]">
                 {/* Top Left - Loading State or Newest Image - always visible if loading or if image exists */}
                 {(isLoading || generatedResults[0]) && (
-                  <div className="relative bg-white rounded-sm overflow-hidden shadow-sm">
+                  <div className="relative bg-white rounded-xl overflow-hidden shadow-sm w-full h-full">
                     {isLoading ? (
                       <div className="w-full h-full flex flex-col items-center justify-center p-4 bg-gray-50">
                         <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
@@ -566,10 +671,23 @@ function CreateNew() {
                         </div>
                       </div>
                     ) : generatedResults[0] ? (
-                      <RobustImage
-                        src={generatedResults[0].generatedImage}
-                        alt="Latest design"
-                      />
+                      <div className="w-full h-full rounded-xl overflow-hidden group">
+                        <div className="absolute top-2 right-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button
+                            onClick={() =>
+                              openImageModal(generatedResults[0].generatedImage)
+                            }
+                            className="bg-white rounded-full p-2 shadow-md hover:bg-gray-100 transition-colors"
+                            aria-label="Zoom image"
+                          >
+                            <FiZoomIn className="w-5 h-5 text-gray-700" />
+                          </button>
+                        </div>
+                        <RobustImage
+                          src={generatedResults[0].generatedImage}
+                          alt="Latest design"
+                        />
+                      </div>
                     ) : null}
                   </div>
                 )}
@@ -577,17 +695,43 @@ function CreateNew() {
                 {/* Top Right - First Image when loading or Second Newest Image - only visible if has content */}
                 {((isLoading && generatedResults[0]) ||
                   (!isLoading && generatedResults[1])) && (
-                  <div className="relative bg-white rounded-sm overflow-hidden shadow-sm">
+                  <div className="relative bg-white rounded-xl overflow-hidden shadow-sm w-full h-full">
                     {isLoading && generatedResults[0] ? (
-                      <RobustImage
-                        src={generatedResults[0].generatedImage}
-                        alt="Previous design"
-                      />
+                      <div className="w-full h-full rounded-xl overflow-hidden group">
+                        <div className="absolute top-2 right-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button
+                            onClick={() =>
+                              openImageModal(generatedResults[0].generatedImage)
+                            }
+                            className="bg-white rounded-full p-2 shadow-md hover:bg-gray-100 transition-colors"
+                            aria-label="Zoom image"
+                          >
+                            <FiZoomIn className="w-5 h-5 text-gray-700" />
+                          </button>
+                        </div>
+                        <RobustImage
+                          src={generatedResults[0].generatedImage}
+                          alt="Previous design"
+                        />
+                      </div>
                     ) : generatedResults[1] ? (
-                      <RobustImage
-                        src={generatedResults[1].generatedImage}
-                        alt="Previous design"
-                      />
+                      <div className="w-full h-full rounded-xl overflow-hidden group">
+                        <div className="absolute top-2 right-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button
+                            onClick={() =>
+                              openImageModal(generatedResults[1].generatedImage)
+                            }
+                            className="bg-white rounded-full p-2 shadow-md hover:bg-gray-100 transition-colors"
+                            aria-label="Zoom image"
+                          >
+                            <FiZoomIn className="w-5 h-5 text-gray-700" />
+                          </button>
+                        </div>
+                        <RobustImage
+                          src={generatedResults[1].generatedImage}
+                          alt="Previous design"
+                        />
+                      </div>
                     ) : null}
                   </div>
                 )}
@@ -595,17 +739,43 @@ function CreateNew() {
                 {/* Bottom Left - Second image when loading or Third Newest Image - only visible if has content */}
                 {((isLoading && generatedResults[1]) ||
                   (!isLoading && generatedResults[2])) && (
-                  <div className="relative bg-white rounded-sm overflow-hidden shadow-sm">
+                  <div className="relative bg-white rounded-xl overflow-hidden shadow-sm w-full h-full">
                     {isLoading && generatedResults[1] ? (
-                      <RobustImage
-                        src={generatedResults[1].generatedImage}
-                        alt="Older design"
-                      />
+                      <div className="w-full h-full rounded-xl overflow-hidden group">
+                        <div className="absolute top-2 right-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button
+                            onClick={() =>
+                              openImageModal(generatedResults[1].generatedImage)
+                            }
+                            className="bg-white rounded-full p-2 shadow-md hover:bg-gray-100 transition-colors"
+                            aria-label="Zoom image"
+                          >
+                            <FiZoomIn className="w-5 h-5 text-gray-700" />
+                          </button>
+                        </div>
+                        <RobustImage
+                          src={generatedResults[1].generatedImage}
+                          alt="Older design"
+                        />
+                      </div>
                     ) : generatedResults[2] ? (
-                      <RobustImage
-                        src={generatedResults[2].generatedImage}
-                        alt="Older design"
-                      />
+                      <div className="w-full h-full rounded-xl overflow-hidden group">
+                        <div className="absolute top-2 right-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button
+                            onClick={() =>
+                              openImageModal(generatedResults[2].generatedImage)
+                            }
+                            className="bg-white rounded-full p-2 shadow-md hover:bg-gray-100 transition-colors"
+                            aria-label="Zoom image"
+                          >
+                            <FiZoomIn className="w-5 h-5 text-gray-700" />
+                          </button>
+                        </div>
+                        <RobustImage
+                          src={generatedResults[2].generatedImage}
+                          alt="Older design"
+                        />
+                      </div>
                     ) : null}
                   </div>
                 )}
@@ -613,17 +783,43 @@ function CreateNew() {
                 {/* Bottom Right - Third image when loading or Fourth Newest Image - only visible if has content */}
                 {((isLoading && generatedResults[2]) ||
                   (!isLoading && generatedResults[3])) && (
-                  <div className="relative bg-white rounded-sm overflow-hidden shadow-sm">
+                  <div className="relative bg-white rounded-xl overflow-hidden shadow-sm w-full h-full">
                     {isLoading && generatedResults[2] ? (
-                      <RobustImage
-                        src={generatedResults[2].generatedImage}
-                        alt="Oldest design"
-                      />
+                      <div className="w-full h-full rounded-xl overflow-hidden group">
+                        <div className="absolute top-2 right-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button
+                            onClick={() =>
+                              openImageModal(generatedResults[2].generatedImage)
+                            }
+                            className="bg-white rounded-full p-2 shadow-md hover:bg-gray-100 transition-colors"
+                            aria-label="Zoom image"
+                          >
+                            <FiZoomIn className="w-5 h-5 text-gray-700" />
+                          </button>
+                        </div>
+                        <RobustImage
+                          src={generatedResults[2].generatedImage}
+                          alt="Oldest design"
+                        />
+                      </div>
                     ) : generatedResults[3] ? (
-                      <RobustImage
-                        src={generatedResults[3].generatedImage}
-                        alt="Oldest design"
-                      />
+                      <div className="w-full h-full rounded-xl overflow-hidden group">
+                        <div className="absolute top-2 right-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button
+                            onClick={() =>
+                              openImageModal(generatedResults[3].generatedImage)
+                            }
+                            className="bg-white rounded-full p-2 shadow-md hover:bg-gray-100 transition-colors"
+                            aria-label="Zoom image"
+                          >
+                            <FiZoomIn className="w-5 h-5 text-gray-700" />
+                          </button>
+                        </div>
+                        <RobustImage
+                          src={generatedResults[3].generatedImage}
+                          alt="Oldest design"
+                        />
+                      </div>
                     ) : null}
                   </div>
                 )}
@@ -631,7 +827,7 @@ function CreateNew() {
             </div>
           ) : (
             // Clean, minimal placeholder when no images are generated
-            <div className="w-full h-full flex flex-col items-center justify-center text-center p-6">
+            <div className="w-full h-full max-h-[95vh] max-w-[95%] flex flex-col items-center justify-center text-center p-6 bg-white rounded-xl shadow-sm">
               <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
                 <MdPhotoLibrary className="w-8 h-8 text-gray-400" />
               </div>
@@ -646,6 +842,37 @@ function CreateNew() {
           )}
         </div>
       </div>
+
+      {/* Image Modal */}
+      {modalImage && (
+        <div
+          className="fixed inset-0 z-50 bg-black bg-opacity-80 flex items-center justify-center p-4 transition-opacity"
+          onClick={closeImageModal}
+        >
+          <div
+            className="relative max-w-[95vw] max-h-[95vh] rounded-xl overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              onClick={closeImageModal}
+              className="absolute top-3 right-3 bg-white rounded-full p-2 shadow-md hover:bg-gray-100 transition-colors z-10"
+              aria-label="Close"
+            >
+              <FiX className="w-5 h-5 text-gray-700" />
+            </button>
+            <div className="w-full h-full bg-white">
+              <Image
+                src={modalImage}
+                alt="Full size render"
+                width={1200}
+                height={800}
+                className="object-contain w-full h-full"
+                priority
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -2,7 +2,6 @@
 
 import React from 'react'
 import { ReactNode } from 'react';
-import Header from './_components/Header';
 import { Sidebar } from './_components/Sidebar';
 
 function DashboardLayout({ children }: { children: ReactNode }) {
@@ -12,7 +11,7 @@ function DashboardLayout({ children }: { children: ReactNode }) {
         <Sidebar />
       </div>
       <div className="flex-1 ml-64">
-        <div className="px-4 md:px-6 pt-16">    
+        <div className=" pt-10">    
             {children}
         </div>
       </div>
