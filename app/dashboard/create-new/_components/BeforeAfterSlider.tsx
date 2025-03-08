@@ -6,6 +6,12 @@ import 'react-before-after-slider-component/dist/build.css';
 import { Button } from '@/components/ui/button';
 import { Download, SplitSquareHorizontal, Heart } from 'lucide-react';
 import { DialogContent } from '@/components/ui/dialog';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { toast } from "sonner";
 import Image from 'next/image';
 
@@ -30,118 +36,144 @@ const BeforeAfterSliderComponent: React.FC<BeforeAfterSliderProps> = ({
   const [showComparison, setShowComparison] = useState(false);
   const [isFavorited, setIsFavorited] = useState(false);
 
-  // Check if the current image is favorited on component mount
   useEffect(() => {
     const favorites = JSON.parse(localStorage.getItem('favorites') || '[]');
     setIsFavorited(favorites.some((fav: FavoriteImage) => fav.imageUrl === afterImage));
   }, [afterImage]);
 
   const FIRST_IMAGE = {
-    imageUrl: beforeImage
+    imageUrl: beforeImage,
+    alt: "Original Room"
   };
   const SECOND_IMAGE = {
-    imageUrl: afterImage
+    imageUrl: afterImage,
+    alt: "Generated Room"
   };
 
   const toggleFavorite = () => {
     const favorites: FavoriteImage[] = JSON.parse(localStorage.getItem('favorites') || '[]');
     
     if (isFavorited) {
-      // Remove from favorites
       const updatedFavorites = favorites.filter(fav => fav.imageUrl !== afterImage);
       localStorage.setItem('favorites', JSON.stringify(updatedFavorites));
       setIsFavorited(false);
       toast.success('Removed from favorites');
-      onFavoriteChange?.();
     } else {
-      // Add to favorites
       const newFavorite: FavoriteImage = {
         id: Date.now().toString(),
         imageUrl: afterImage,
         originalImage: beforeImage,
         timestamp: Date.now()
       };
-      const updatedFavorites = [...favorites, newFavorite];
-      localStorage.setItem('favorites', JSON.stringify(updatedFavorites));
+      localStorage.setItem('favorites', JSON.stringify([...favorites, newFavorite]));
       setIsFavorited(true);
       toast.success('Added to favorites');
-      onFavoriteChange?.();
     }
+    onFavoriteChange?.();
   };
 
-  const downloadImage = async (imageUrl: string, fileName: string) => {
+  const downloadImage = async (imageUrl: string) => {
     try {
       const response = await fetch(imageUrl);
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = fileName;
-      document.body.appendChild(link);
+      link.download = 'redesigned-room.jpg';
       link.click();
-      document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
     } catch (error) {
       console.error('Error downloading image:', error);
+      toast.error('Failed to download image');
     }
   };
 
   return (
-    <DialogContent className="bg-white h-full max-w-[95vw] w-[1200px]">
-      <div className="flex flex-col gap-4 h-full">
-        <div className="before-after-slider relative flex-1 min-h-[70vh]">
-          {showComparison ? (
-            <div className="h-full flex items-center justify-center">
-              <div className="w-full h-full max-h-[70vh]">
-                <ReactBeforeSliderComponent
-                  firstImage={FIRST_IMAGE}
-                  secondImage={SECOND_IMAGE}
-                />
-              </div>
-            </div>
-          ) : (
+    <div className="h-full flex flex-col">
+      <div className="relative flex-1 bg-gray-50 rounded-2xl overflow-hidden">
+        {showComparison ? (
+          <div className="w-full h-full flex items-center justify-center">
             <div className="relative w-full h-full">
-              <Image
-                src={afterImage}
-                alt="Redesigned Room"
-                fill
-                className="object-contain"
-                sizes="95vw"
-                priority
+              <ReactBeforeSliderComponent
+                firstImage={FIRST_IMAGE}
+                secondImage={SECOND_IMAGE}
+                delimiterColor="#fff"
+                currentPercentPosition={50}
               />
             </div>
-          )}
-          <Button
-            onClick={toggleFavorite}
-            variant="ghost"
-            size="icon"
-            className="absolute top-4 right-4 z-10 bg-white/80 hover:bg-white text-gray-700 hover:text-red-500"
-          >
-            <Heart className={`w-6 h-6 ${isFavorited ? 'fill-red-500 text-red-500' : ''}`} />
-          </Button>
+          </div>
+        ) : (
+          <div className="relative h-full rounded-2xl overflow-hidden flex items-center justify-center">
+            <Image
+              src={afterImage}
+              alt="Redesigned Room"
+              fill
+              className="object-contain"
+              priority
+              sizes="800px"
+            />
+          </div>
+        )}
+        
+        {/* Favorite button stays at top right */}
+        <div className="absolute top-3 right-10">
+          <TooltipProvider delayDuration={200}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  onClick={toggleFavorite}
+                  size="icon"
+                  variant="secondary"
+                  className="bg-white/80 hover:bg-white backdrop-blur-sm rounded-full"
+                >
+                  <Heart className={`w-4 h-4 ${isFavorited ? 'fill-red-500 text-red-500' : ''}`} />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">
+                {isFavorited ? 'Remove from favorites' : 'Add to favorites'}
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         </div>
-        <div className="flex gap-3 justify-center p-6">
-          <Button
-            onClick={() => setShowComparison(!showComparison)}
-            variant="outline"
-            size="lg"
-            className="bg-white text-gray-700 border-gray-200"
-          >
-            <SplitSquareHorizontal className="w-5 h-5 mr-2" />
-            {showComparison ? 'Hide Comparison' : 'Compare'}
-          </Button>
-          <Button
-            onClick={() => downloadImage(afterImage, 'redesigned-room.jpg')}
-            variant="outline"
-            size="lg"
-            className="bg-white text-gray-700 border-gray-200"
-          >
-            <Download className="w-5 h-5 mr-2" />
-            Download Redesigned
-          </Button>
+
+        {/* Compare and Download buttons at bottom center */}
+        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2">
+          <TooltipProvider delayDuration={200}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  onClick={() => setShowComparison(!showComparison)}
+                  size="icon"
+                  variant="secondary"
+                  className="bg-white/80 hover:bg-white backdrop-blur-sm rounded-full"
+                >
+                  <SplitSquareHorizontal className="w-4 h-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="top">
+                {showComparison ? 'Hide comparison' : 'Compare with original'}
+              </TooltipContent>
+            </Tooltip>
+
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  onClick={() => downloadImage(afterImage)}
+                  size="icon"
+                  variant="secondary"
+                  className="bg-white/80 hover:bg-white backdrop-blur-sm rounded-full"
+                >
+                  <Download className="w-4 h-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="top">
+                Download image
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         </div>
       </div>
-    </DialogContent>
+    </div>
   );
 };
 

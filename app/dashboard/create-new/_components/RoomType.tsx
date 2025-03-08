@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { memo } from 'react'
 import { roomTypes } from '@/lib/utils'
 import {
   Select,
@@ -12,23 +12,21 @@ interface RoomTypeProps {
   selectedRoomType: (value: string) => void;
 }
 
-interface RoomType {
-  value: string;
-  label: string;
-  image: string;
-}
-
-function RoomType({ selectedRoomType }: RoomTypeProps) {
+const RoomType = memo(({ selectedRoomType }: RoomTypeProps) => {
   return (
     <div className="space-y-2 px-8 py-4">
       <h2 className="text-xl font-semibold text-gray-900 mb-4">Select Room Type</h2>
       <Select onValueChange={selectedRoomType}>
-        <SelectTrigger className="font-bold">
+        <SelectTrigger className="font-bold focus:ring-2 focus:ring-blue-500 transition-shadow">
           <SelectValue placeholder="Select a room type" />
         </SelectTrigger>
         <SelectContent>
-          {roomTypes.map((room: RoomType) => (
-            <SelectItem key={room.value} value={room.value}>
+          {roomTypes.map((room) => (
+            <SelectItem 
+              key={room.value} 
+              value={room.value}
+              className="cursor-pointer hover:bg-blue-50 transition-colors"
+            >
               {room.label}
             </SelectItem>
           ))}
@@ -36,6 +34,8 @@ function RoomType({ selectedRoomType }: RoomTypeProps) {
       </Select>
     </div>
   )
-}
+});
 
-export default RoomType
+RoomType.displayName = 'RoomType';
+
+export default RoomType;

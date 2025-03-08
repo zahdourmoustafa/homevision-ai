@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useRef, ChangeEvent } from 'react';
+import React, { useState, useRef, ChangeEvent, useCallback, memo } from 'react';
 import Image from 'next/image';
 import { FiUploadCloud, FiX } from 'react-icons/fi';
 import { MdPhotoLibrary } from 'react-icons/md';
@@ -9,27 +9,33 @@ interface ImageSelectionProps {
   onFileSelected: (file: File | null) => void;
 }
 
-function ImageSelection({ onFileSelected }: ImageSelectionProps) {
+const ImageSelection = memo(({ onFileSelected }: ImageSelectionProps) => {
   const [preview, setPreview] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleImageChange = (e: ChangeEvent<HTMLInputElement>) => {
+  const handleImageChange = useCallback((e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      // Validate file size before processing
+      if (file.size > 10 * 1024 * 1024) { // 10MB limit
+        alert('File size should be less than 10MB');
+        return;
+      }
+
       const reader = new FileReader();
       reader.onloadend = () => {
         setPreview(reader.result as string);
+        onFileSelected(file);
       };
       reader.readAsDataURL(file);
-      onFileSelected(file);
     }
-  };
+  }, [onFileSelected]);
 
-  const handleRemoveImage = () => {
+  const handleRemoveImage = useCallback(() => {
     setPreview(null);
     if (fileInputRef.current) fileInputRef.current.value = '';
     onFileSelected(null);
-  };
+  }, [onFileSelected]);
 
   return (
     <div className="space-y-2 px-8 py-4">
@@ -40,6 +46,7 @@ function ImageSelection({ onFileSelected }: ImageSelectionProps) {
             <button
               onClick={handleRemoveImage}
               className="absolute top-2 right-2 z-10 p-1 rounded-full bg-white/80 hover:bg-white transition-colors"
+              type="button"
             >
               <FiX className="w-5 h-5 text-gray-700" />
             </button>
@@ -49,6 +56,8 @@ function ImageSelection({ onFileSelected }: ImageSelectionProps) {
               fill
               className="object-contain"
               sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+              priority={true}
+              loading="eager"
             />
           </div>
         ) : (
@@ -74,6 +83,8 @@ function ImageSelection({ onFileSelected }: ImageSelectionProps) {
       </div>
     </div>
   );
-}
+});
+
+ImageSelection.displayName = 'ImageSelection';
 
 export default ImageSelection;

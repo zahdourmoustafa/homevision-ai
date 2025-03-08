@@ -1,0 +1,1 @@
+ALTER TABLE "rooms" ADD COLUMN "transformed_image_url" text NOT NULL;

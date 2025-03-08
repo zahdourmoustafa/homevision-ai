@@ -7,20 +7,26 @@ const tools = [
   {
     title: "Interior",
     description: "Redesign places by taking a picture or uploading a reference photo for redesigned AI generations.",
-    image: "/path/to/interior-image.jpg",
-    badge: "New",
+    image: "/room.png",
+    badge: "Popular",
     tokens: "1 token / generation",
     link: "/dashboard/create-new",
   },
   {
+    title: "Sketch to Reality",
+    description: "Transform your hand-drawn room sketches into photorealistic interior designs with AI.",
+    image: "/sketch-room.png",
+    badge: "New",
+    tokens: "1 token / generation",
+    link: "/dashboard/sketch-create-new",
+  },
+  {
     title: "Exterior",
     description: "Redesign places by taking a picture or uploading a reference photo for redesigned AI generations.",
-    image: "/path/to/exterior-image.jpg",
+    image: "/room.png",
     tokens: "1 token / generation",
     link: "/dashboard/create-new",
   },
-
-  // Add more tools as needed
 ]
 
 function Dashboard() {

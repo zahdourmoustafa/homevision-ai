@@ -84,16 +84,16 @@ export default function FavoritesPage() {
           </div>
 
           <Dialog open={!!selectedImages} onOpenChange={() => setSelectedImages(null)}>
-            {selectedImages && (
-              <DialogContent className="max-w-[95vw] w-[1200px] h-[90vh] p-0">
-                <DialogTitle className="text-xl font-semibold p-6">Room Comparison</DialogTitle>
+            <DialogContent className="max-w-[800px] w-full h-[600px] p-0">
+              <DialogTitle className="sr-only">Room Comparison</DialogTitle>
+              {selectedImages && (
                 <BeforeAfterSliderComponent
                   beforeImage={selectedImages.before}
                   afterImage={selectedImages.after}
                   onFavoriteChange={loadFavorites}
                 />
-              </DialogContent>
-            )}
+              )}
+            </DialogContent>
           </Dialog>
         </>
       )}
