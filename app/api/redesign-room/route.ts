@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import axios from "axios"; // Use Axios for fetching the image
 import { supabase } from "@/lib/supabase"; // Import your Supabase client
-import sharp from "sharp";
 
 // Define the Luma API response type
 type LumaResponse = {

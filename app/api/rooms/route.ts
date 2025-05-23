@@ -10,11 +10,12 @@ export async function POST(req: Request) {
     const newRoom = await db
       .insert(rooms)
       .values({
-        imageurl,
-        roomtype,
-        designtype,
-        additionalreq,
-        userEmail,
+        image_url: imageurl,
+        transformed_image_url: "",
+        room_type: roomtype,
+        design_type: designtype,
+        additional_requirements: additionalreq,
+        user_email: userEmail,
       })
       .returning();
 

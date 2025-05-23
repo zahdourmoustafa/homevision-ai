@@ -104,7 +104,7 @@ const BeforeAfterSliderComponent: React.FC<BeforeAfterSliderProps> = ({
         try {
           const errorJson = await response.json();
           errorBody = errorJson.error || JSON.stringify(errorJson);
-        } catch (e) {
+        } catch {
           // If response is not JSON, use status text
           errorBody = response.statusText;
         }
