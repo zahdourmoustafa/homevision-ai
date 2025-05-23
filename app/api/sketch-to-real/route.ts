@@ -4,8 +4,6 @@ import axios from "axios";
 import { supabase } from "@/lib/supabase";
 import sharp from "sharp";
 
-type ReplicateResponse = string[] | string | { output?: string };
-
 const replicate = new Replicate({
   auth: process.env.NEXT_PUBLIC_REPLICATE_API_TOKEN,
 });
@@ -40,7 +38,7 @@ const uploadBase64ImageToSupabase = async (base64Image: string, fileName: string
     const extension = contentType === "image/jpeg" ? ".jpg" : contentType === "image/png" ? ".png" : ".webp";
     const finalFileName = `${fileName}${extension}`;
     
-    const { data, error } = await supabase.storage
+    const { error } = await supabase.storage
       .from("interior-images")
       .upload(`generated/${finalFileName}`, buffer, {
         contentType,
@@ -80,9 +78,9 @@ export async function POST(req: Request) {
           prompt: `Transform this sketch into a photorealistic ${design}-style ${roomType}, maintaining the layout and furniture positions. ${additionalRequirement || ""}`
         }
       }
-    ) as any;
+    ) as string[] | string | { output?: string };
     
-    let generatedImageUrl = typeof output === "string" ? output : Array.isArray(output) ? output[0] : output?.output;
+    const generatedImageUrl = typeof output === "string" ? output : Array.isArray(output) ? output[0] : (output as { output?: string })?.output;
     if (!generatedImageUrl) throw new Error("Invalid Replicate API response");
 
     console.log("Uploading to Supabase...");

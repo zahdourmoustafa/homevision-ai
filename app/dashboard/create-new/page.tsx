@@ -1,17 +1,19 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import axios from "axios";
 import { supabase } from "@/lib/supabase";
-import { TextLoader } from "./_components/CustomLoading";
 import { MdPhotoLibrary } from "react-icons/md";
 import { useUser } from "@clerk/nextjs";
 import Image from "next/image";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Slider } from "@/components/ui/slider";
-import { InteractiveHoverButton } from "@/components/ui/interactive-hover-button";
+import { Button } from "@/components/ui/button";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import {
   Select,
   SelectContent,
@@ -23,27 +25,16 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   FiUpload,
   FiCheck,
-  FiZoomIn,
   FiX,
   FiMaximize2,
   FiTrash2,
   FiDownload,
-  FiSliders,
   FiChevronDown,
 } from "react-icons/fi";
 import { roomTypes } from "@/lib/utils";
 import BeforeAfterSlider from "@/app/components/BeforeAfterSlider";
 import { cn } from "@/lib/utils";
-import {
-  Zap,
-  Sun,
-  Palmtree,
-  Waves,
-  Clock,
-  Factory,
-  Building,
-  Feather,
-} from "lucide-react";
+import { Tabs, TabsContent } from "@/components/ui/tabs";
 
 // Interface for the generated result
 interface GeneratedResult {
@@ -151,16 +142,12 @@ function CreateNew() {
   const [generatedResults, setGeneratedResults] = useState<GeneratedResult[]>(
     []
   );
-  const [activeSlider, setActiveSlider] = useState<GeneratedResult | null>(
-    null
-  );
   const [roomType, setRoomType] = useState<string>("");
   const [selectedDesignTypes, setSelectedDesignTypes] = useState<string[]>([]);
   const [designType, setDesignType] = useState<string>("");
   const [additionalReq, setAdditionalReq] = useState<string>("");
-  const [aiCreativity, setAiCreativity] = useState<number>(50); // Default to middle value
+  const [aiCreativity] = useState<number>(50);
   const { user } = useUser();
-  // Add new state for the image modal
   const [modalImage, setModalImage] = useState<string | null>(null);
   const [isCompareMode, setIsCompareMode] = useState(false);
   const [viewMode, setViewMode] = useState<"after" | "before" | "side-by-side">(
@@ -169,8 +156,8 @@ function CreateNew() {
   const [currentResultIndex, setCurrentResultIndex] = useState<number | null>(
     null
   );
-  const [isRoomTypeSectionOpen, setIsRoomTypeSectionOpen] = useState(true); // State for collapsible section
-  const [isThemeSectionOpen, setIsThemeSectionOpen] = useState(true); // State for theme section collapse
+  const [isRoomTypeSectionOpen, setIsRoomTypeSectionOpen] = useState(true);
+  const [isThemeSectionOpen, setIsThemeSectionOpen] = useState(true);
 
   // Key for localStorage
   const localStorageKey = "generatedInteriorResults";
@@ -270,15 +257,6 @@ function CreateNew() {
       setDesignType("");
     }
   }, [selectedDesignTypes]);
-
-  // Loading messages for the animation
-  const loadingMessages = [
-    "Analyzing your room...",
-    "Applying design style...",
-    "Generating new interior...",
-    "Adding finishing touches...",
-    "Almost there...",
-  ];
 
   // Handle file selection
   const handleFileSelected = (file: File) => {
@@ -408,7 +386,8 @@ function CreateNew() {
           );
           console.log("API Response:", result.data);
           break; // Success, exit the retry loop
-        } catch (apiError) {
+        } catch (apiError: unknown) {
+          // Changed any to unknown
           console.error(`API call attempt ${retryCount + 1} failed:`, apiError);
 
           if (retryCount === maxRetries) {
@@ -465,13 +444,15 @@ function CreateNew() {
             "Too many requests. Please wait a moment before trying again."
           );
         } else {
-          toast.error(
-            `Error: ${
-              error.response.data?.error ||
-              error.message ||
-              "Something went wrong"
-            }`
-          );
+          let errorBody = "Something went wrong";
+          try {
+            const errorJson = error.response.data; // error.response.data might be an object
+            errorBody = errorJson.error || JSON.stringify(errorJson);
+          } catch (e) {
+            // If response.data is not an object or cannot be stringified
+            errorBody = error.message || "Something went wrong";
+          }
+          toast.error(`Error: ${errorBody}`);
         }
       } else {
         toast.error("Failed to generate design. Please try again.");
@@ -495,11 +476,6 @@ function CreateNew() {
     setCurrentResultIndex(null);
     setIsCompareMode(false);
     setViewMode("after");
-  };
-
-  // Function to toggle compare mode
-  const toggleCompareMode = () => {
-    setIsCompareMode(!isCompareMode);
   };
 
   // Function to set the view mode
@@ -557,7 +533,7 @@ function CreateNew() {
         try {
           const errorJson = await response.json();
           errorBody = errorJson.error || JSON.stringify(errorJson);
-        } catch (jsonError) {
+        } catch (e) {
           errorBody = response.statusText;
         }
         throw new Error(
@@ -636,7 +612,7 @@ function CreateNew() {
       // If we have a modalImage but no valid index/result, just show the image
       if (modalImage) {
         return (
-          <img
+          <RobustImage
             src={modalImage}
             alt="Enlarged view"
             className="max-h-[75vh] max-w-full object-contain"
@@ -660,11 +636,11 @@ function CreateNew() {
     switch (viewMode) {
       case "before":
         console.log("Rendering BEFORE view");
-        // Log the specific URL being used for the 'before' image
+        // Log the specific URL being used for the \'before\' image
         console.log("Attempting to load Before image URL:", beforeImg);
         if (beforeImg) {
           return (
-            <img
+            <RobustImage
               src={beforeImg}
               alt="Original view"
               className="max-h-[75vh] max-w-full object-contain"
@@ -708,7 +684,7 @@ function CreateNew() {
       default:
         console.log("Rendering AFTER view");
         return (
-          <img
+          <RobustImage
             src={afterImg}
             alt="Generated view"
             className="max-h-[75vh] max-w-full object-contain"
@@ -717,560 +693,116 @@ function CreateNew() {
     }
   };
 
+  if (!modalImage || currentResultIndex === null) return null;
+
+  const currentImage = generatedResults[currentResultIndex];
+  let beforeSrc = currentImage.rawImage;
+  let afterSrc = currentImage.generatedImage;
+
+  // Ensure that beforeSrc and afterSrc are valid strings
+  if (typeof beforeSrc !== "string") {
+    console.error("Invalid beforeSrc:", beforeSrc);
+    beforeSrc = ""; // Fallback to an empty string or some default placeholder
+  }
+  if (typeof afterSrc !== "string") {
+    console.error("Invalid afterSrc:", afterSrc);
+    afterSrc = ""; // Fallback to an empty string
+  }
+
+  // Conditional rendering for different view modes
+  let modalContent;
+  if (viewMode === "side-by-side" && beforeSrc && afterSrc) {
+    modalContent = (
+      <BeforeAfterSlider beforeImage={beforeSrc} afterImage={afterSrc} />
+    );
+  } else if (viewMode === "before" && beforeSrc) {
+    modalContent = (
+      <Image
+        src={beforeSrc}
+        alt="Original room"
+        fill
+        className="object-contain rounded-lg"
+        unoptimized
+      />
+    );
+  } else if (afterSrc) {
+    // Default to "after"
+    modalContent = (
+      <Image
+        src={afterSrc}
+        alt="Generated room"
+        fill
+        className="object-contain rounded-lg"
+        unoptimized
+      />
+    );
+  } else {
+    modalContent = <p>Image not available</p>; // Fallback if no valid image
+  }
+
   return (
-    <div className="flex flex-col h-screen bg-white">
-      {/* Main content area */}
-      <div className="flex-1 flex flex-col md:flex-row overflow-hidden w-full bg-gray-100">
-        {/* Left panel - Controls - Ensure it has white background */}
-        <div className="w-full md:w-[500px] overflow-y-auto h-[calc(100vh-60px)] md:h-screen p-4 md:border-r border-gray-200 bg-white">
-          <div className="space-y-6 pb-8">
-            {/* Upload Image Section - Wrapped in a box */}
-            <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
-              <div className="text-lg font-medium flex items-center gap-2 text-gray-800 mb-3">
-                Upload image
-              </div>
-              {/* Image upload area */}
-              <div
-                className="mt-2 border border-dashed rounded-lg p-4 cursor-pointer hover:bg-gray-50 transition-colors border-gray-300"
-                onDrop={handleDrop}
-                onDragOver={handleDragOver}
-                onClick={() => document.getElementById("file-upload")?.click()}
-              >
-                {preview ? (
-                  <div className="relative w-full h-[200px]">
-                    {typeof preview === "string" && preview.trim() !== "" && (
-                      <Image
-                        src={preview}
-                        alt="Room preview"
-                        fill
-                        className="object-contain rounded-lg"
-                        sizes="(max-width: 768px) 100vw, 400px"
-                      />
-                    )}
-                  </div>
-                ) : (
-                  <div className="flex flex-col items-center justify-center py-8">
-                    <div className="bg-blue-100 rounded-full p-2 mb-2">
-                      <FiUpload className="w-5 h-5 text-blue-900" />
-                    </div>
-                    <p className="text-sm text-center text-gray-600">
-                      Click to upload or drag and drop your image here
-                    </p>
-                    <p className="text-xs text-gray-500 mt-1">or</p>
-                    <p className="text-xs text-blue-900 mt-1">
-                      Use one of our sample images
-                    </p>
-                  </div>
-                )}
-              </div>
-              <input
-                id="file-upload"
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={handleFileInputChange}
-              />
-            </div>
-
-            {/* Tabs Section - Wrapped in a box (Assuming tabs belong together) */}
-            <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
-              <Tabs defaultValue="custom" className="w-full">
-                <TabsContent value="custom" className="space-y-6">
-                  {/* Room Type Section - Wrapped in its own div for structure, header styled */}
-                  <div className="space-y-2">
-                    <button
-                      onClick={() =>
-                        setIsRoomTypeSectionOpen(!isRoomTypeSectionOpen)
-                      }
-                      className="w-full flex items-center justify-between text-sm font-bold text-black py-2 px-3 rounded-md hover:bg-gray-50 border border-gray-200"
-                    >
-                      Select Room Type
-                      <FiChevronDown
-                        className={`w-4 h-4 text-gray-500 transform transition-transform duration-200 ${
-                          isRoomTypeSectionOpen ? "rotate-180" : ""
-                        }`}
-                      />
-                    </button>
-                    {isRoomTypeSectionOpen && (
-                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 pt-3">
-                        {roomTypes.map((rt) => {
-                          const isSelected = roomType === rt.value;
-                          return (
-                            <div
-                              key={rt.value}
-                              onClick={() => setRoomType(rt.value)}
-                              className={cn(
-                                "cursor-pointer flex flex-col items-center justify-center p-3 rounded-lg border transition-all duration-150 ease-in-out",
-                                isSelected
-                                  ? "border-orange-500 ring-2 ring-orange-500 bg-orange-50 shadow-md"
-                                  : "border-gray-300 bg-white hover:border-gray-400 hover:shadow-sm",
-                                "aspect-[4/3]" // Maintain aspect ratio for items
-                              )}
-                            >
-                              <span className="text-3xl mb-1.5">{rt.icon}</span>
-                              <span
-                                className={cn(
-                                  "text-xs text-center font-medium",
-                                  isSelected
-                                    ? "text-orange-700"
-                                    : "text-gray-700"
-                                )}
-                              >
-                                {rt.label}
-                              </span>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Design Style Section - Wrapped, header styled */}
-                  <div className="space-y-2">
-                    <button
-                      onClick={() => setIsThemeSectionOpen(!isThemeSectionOpen)}
-                      className="w-full flex items-center justify-between text-sm font-bold text-black py-2 px-3 rounded-md hover:bg-gray-50 border border-gray-200"
-                    >
-                      Select Room Design (up to 4)
-                      <FiChevronDown
-                        className={`w-4 h-4 text-gray-500 transform transition-transform duration-200 ${
-                          isThemeSectionOpen ? "rotate-180" : ""
-                        }`}
-                      />
-                    </button>
-                    {isThemeSectionOpen && (
-                      <>
-                        <div className="grid grid-cols-3 gap-3 pt-3">
-                          {designStyles.map((style) => {
-                            const isSelected = selectedDesignTypes.includes(
-                              style.value
-                            );
-                            return (
-                              <div
-                                key={style.value}
-                                onClick={() => toggleDesignStyle(style.value)}
-                                className="cursor-pointer flex flex-col items-center group relative"
-                              >
-                                <div
-                                  className={cn(
-                                    "relative w-full aspect-square rounded-lg overflow-hidden border transition-all",
-                                    isSelected
-                                      ? "ring-2 ring-blue-500 border-blue-500"
-                                      : "border-gray-300 group-hover:border-gray-400"
-                                  )}
-                                >
-                                  {isSelected && (
-                                    <div className="absolute top-1.5 right-1.5 z-10 bg-blue-600 rounded-full w-5 h-5 flex items-center justify-center shadow-sm">
-                                      <FiCheck className="w-3 h-3 text-white" />
-                                    </div>
-                                  )}
-                                  <Image
-                                    src={style.image}
-                                    alt={style.label}
-                                    fill
-                                    className="object-cover transition-transform duration-200 group-hover:scale-105"
-                                    sizes="(max-width: 768px) 30vw, 150px"
-                                  />
-                                </div>
-                                <span
-                                  className={cn(
-                                    "text-xs text-center mt-1.5 font-medium",
-                                    isSelected
-                                      ? "text-blue-700"
-                                      : "text-gray-700 group-hover:text-gray-900"
-                                  )}
-                                >
-                                  {style.label}
-                                </span>
-                              </div>
-                            );
-                          })}
-                        </div>
-                        <div className="mt-1 flex items-center justify-between">
-                          <p className="text-xs text-gray-500">
-                            {selectedDesignTypes.length === 0
-                              ? "Select up to 4 themes"
-                              : `${selectedDesignTypes.length} theme${
-                                  selectedDesignTypes.length > 1 ? "s" : ""
-                                } selected`}
-                          </p>
-                          {selectedDesignTypes.length > 0 && (
-                            <button
-                              onClick={() => setSelectedDesignTypes([])}
-                              className="text-xs text-gray-500 hover:text-blue-600 hover:underline"
-                            >
-                              Clear All
-                            </button>
-                          )}
-                        </div>
-                      </>
-                    )}
-                  </div>
-
-                  {/* Custom Design Request - Wrapped, header styled */}
-                  <div className="space-y-2">
-                    <label className="text-sm font-bold text-black block px-3">
-                      Custom Design Request
-                    </label>
-                    <Textarea
-                      placeholder="A modern kitchen with navy blue cabinets, marble countertops, oak vinyl plank flooring, gold accents, pendant lights..."
-                      className="resize-none min-h-[100px] bg-gray-50 text-gray-700 border-gray-300 placeholder-gray-400 rounded-md"
-                      onChange={(e) => setAdditionalReq(e.target.value)}
-                    />
-                  </div>
-                </TabsContent>
-              </Tabs>
-            </div>
-
-            {/* Visualize Button (remains outside the boxes, but within the left panel) */}
-            <InteractiveHoverButton
-              text={isLoading ? "Visualizing..." : "Visualize"}
-              onClick={generateAiImage}
-              disabled={
-                isLoading ||
-                !selectedFile ||
-                !roomType ||
-                selectedDesignTypes.length === 0
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
+      <div className="relative w-full max-w-3xl h-[80vh] bg-themeDarkGray rounded-xl shadow-2xl flex flex-col overflow-hidden p-6">
+        {/* Header with controls */}
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() =>
+                setComparisonView(
+                  viewMode === "side-by-side" ? "after" : "side-by-side"
+                )
               }
-              className="w-full mt-4 h-12 rounded-md text-base font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-            />
-
-            <p className="text-ml text-gray-500 text-center mt-2">
-              Welcome to InteriorAI! Enjoy{" "}
-              <span className="font-bold text-black ">
-                2 complimentary renders
-              </span>{" "}
-              🎁 on the house. Want more? Explore our{" "}
-              <span className="text-orange-500">plans →</span>
-            </p>
+            >
+              <FiMaximize2 className="w-5 h-5" />
+            </Button>
+            {viewMode === "side-by-side" && (
+              <>
+                <Button
+                  variant={"outline"}
+                  onClick={() => setComparisonView("before")}
+                >
+                  Show Original
+                </Button>
+                <Button
+                  variant={"outline"}
+                  onClick={() => setComparisonView("after")}
+                >
+                  Show Generated
+                </Button>
+              </>
+            )}
+          </div>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() =>
+                downloadImage(currentImage.generatedImage, currentResultIndex)
+              }
+            >
+              <FiDownload className="w-5 h-5" />
+            </Button>
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => deleteImage(currentImage.generatedImage)}
+              className="hover:bg-red-500/20 hover:text-red-500 text-red-500 border-red-500"
+            >
+              <FiTrash2 className="w-5 h-5" />
+            </Button>
+            <Button variant="outline" size="icon" onClick={closeImageModal}>
+              <FiX className="w-5 h-5" />
+            </Button>
           </div>
         </div>
 
-        {/* Right panel - Results - Keep fixed */}
-        <div className="flex-1 flex items-center justify-center bg-gray-100 h-[calc(100vh-60px)] md:h-screen p-0 m-0">
-          {generatedResults.length > 0 || isLoading ? (
-            // Always show the grid when we have generated images or are loading
-            <div className="w-full h-full flex items-center justify-center">
-              {/* Always use a 2x2 grid layout that fills the viewport */}
-              <div className="grid grid-cols-2 grid-rows-2 gap-2 w-full h-full">
-                {/* Top Left - Loading State or Newest Image */}
-                {(isLoading || generatedResults[0]) && (
-                  <div className="relative bg-white rounded-xl overflow-hidden shadow-sm w-full h-full">
-                    {isLoading ? (
-                      <div className="w-full h-full flex flex-col items-center justify-center p-4 bg-gray-50">
-                        <div className="relative w-80 h-80 mb-4">
-                          <Image
-                            src="/animated.gif"
-                            alt="Loading"
-                            fill
-                            className="object-contain"
-                          />
-                        </div>
-                        <h3 className="text-lg font-medium text-gray-800 mb-2">
-                          Crafting Your Visualization...
-                        </h3>
-                        <div className="w-full max-w-xs bg-gray-200 h-2 rounded-full mt-2 overflow-hidden">
-                          <div
-                            className="h-full bg-blue-500 rounded-full animate-pulse"
-                            style={{ width: "65%" }}
-                          ></div>
-                        </div>
-                      </div>
-                    ) : generatedResults[0] ? (
-                      <div className="w-full h-full rounded-xl overflow-hidden group">
-                        <div className="absolute top-2 right-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <button
-                            onClick={() =>
-                              openImageModal(
-                                generatedResults[0].generatedImage,
-                                0
-                              )
-                            }
-                            className="bg-black bg-opacity-50 rounded-full p-2 shadow-md hover:bg-opacity-75 transition-colors"
-                            aria-label="View fullscreen"
-                          >
-                            <FiMaximize2 className="w-5 h-5 text-white" />
-                          </button>
-                        </div>
-                        <RobustImage
-                          src={generatedResults[0].generatedImage}
-                          alt="Latest design"
-                        />
-                      </div>
-                    ) : null}
-                  </div>
-                )}
-
-                {/* Top Right - First Image when loading or Second Newest Image - only visible if has content */}
-                {((isLoading && generatedResults[0]) ||
-                  (!isLoading && generatedResults[1])) && (
-                  <div className="relative bg-white rounded-xl overflow-hidden shadow-sm w-full h-full">
-                    {isLoading && generatedResults[0] ? (
-                      <div className="w-full h-full rounded-xl overflow-hidden group">
-                        <div className="absolute top-2 right-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <button
-                            onClick={() =>
-                              openImageModal(
-                                generatedResults[0].generatedImage,
-                                0
-                              )
-                            }
-                            className="bg-black bg-opacity-50 rounded-full p-2 shadow-md hover:bg-opacity-75 transition-colors"
-                            aria-label="View fullscreen"
-                          >
-                            <FiMaximize2 className="w-5 h-5 text-white" />
-                          </button>
-                        </div>
-                        <RobustImage
-                          src={generatedResults[0].generatedImage}
-                          alt="Previous design"
-                        />
-                      </div>
-                    ) : generatedResults[1] ? (
-                      <div className="w-full h-full rounded-xl overflow-hidden group">
-                        <div className="absolute top-2 right-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <button
-                            onClick={() =>
-                              openImageModal(
-                                generatedResults[1].generatedImage,
-                                1
-                              )
-                            }
-                            className="bg-black bg-opacity-50 rounded-full p-2 shadow-md hover:bg-opacity-75 transition-colors"
-                            aria-label="View fullscreen"
-                          >
-                            <FiMaximize2 className="w-5 h-5 text-white" />
-                          </button>
-                        </div>
-                        <RobustImage
-                          src={generatedResults[1].generatedImage}
-                          alt="Previous design"
-                        />
-                      </div>
-                    ) : null}
-                  </div>
-                )}
-
-                {/* Bottom Left - Second image when loading or Third Newest Image - only visible if has content */}
-                {((isLoading && generatedResults[1]) ||
-                  (!isLoading && generatedResults[2])) && (
-                  <div className="relative bg-white rounded-xl overflow-hidden shadow-sm w-full h-full">
-                    {isLoading && generatedResults[1] ? (
-                      <div className="w-full h-full rounded-xl overflow-hidden group">
-                        <div className="absolute top-2 right-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <button
-                            onClick={() =>
-                              openImageModal(
-                                generatedResults[1].generatedImage,
-                                1
-                              )
-                            }
-                            className="bg-black bg-opacity-50 rounded-full p-2 shadow-md hover:bg-opacity-75 transition-colors"
-                            aria-label="View fullscreen"
-                          >
-                            <FiMaximize2 className="w-5 h-5 text-white" />
-                          </button>
-                        </div>
-                        <RobustImage
-                          src={generatedResults[1].generatedImage}
-                          alt="Older design"
-                        />
-                      </div>
-                    ) : generatedResults[2] ? (
-                      <div className="w-full h-full rounded-xl overflow-hidden group">
-                        <div className="absolute top-2 right-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <button
-                            onClick={() =>
-                              openImageModal(
-                                generatedResults[2].generatedImage,
-                                2
-                              )
-                            }
-                            className="bg-black bg-opacity-50 rounded-full p-2 shadow-md hover:bg-opacity-75 transition-colors"
-                            aria-label="View fullscreen"
-                          >
-                            <FiMaximize2 className="w-5 h-5 text-white" />
-                          </button>
-                        </div>
-                        <RobustImage
-                          src={generatedResults[2].generatedImage}
-                          alt="Older design"
-                        />
-                      </div>
-                    ) : null}
-                  </div>
-                )}
-
-                {/* Bottom Right - Third image when loading or Fourth Newest Image - only visible if has content */}
-                {((isLoading && generatedResults[2]) ||
-                  (!isLoading && generatedResults[3])) && (
-                  <div className="relative bg-white rounded-xl overflow-hidden shadow-sm w-full h-full">
-                    {isLoading && generatedResults[2] ? (
-                      <div className="w-full h-full rounded-xl overflow-hidden group">
-                        <div className="absolute top-2 right-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <button
-                            onClick={() =>
-                              openImageModal(
-                                generatedResults[2].generatedImage,
-                                2
-                              )
-                            }
-                            className="bg-black bg-opacity-50 rounded-full p-2 shadow-md hover:bg-opacity-75 transition-colors"
-                            aria-label="View fullscreen"
-                          >
-                            <FiMaximize2 className="w-5 h-5 text-white" />
-                          </button>
-                        </div>
-                        <RobustImage
-                          src={generatedResults[2].generatedImage}
-                          alt="Oldest design"
-                        />
-                      </div>
-                    ) : generatedResults[3] ? (
-                      <div className="w-full h-full rounded-xl overflow-hidden group">
-                        <div className="absolute top-2 right-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <button
-                            onClick={() =>
-                              openImageModal(
-                                generatedResults[3].generatedImage,
-                                3
-                              )
-                            }
-                            className="bg-black bg-opacity-50 rounded-full p-2 shadow-md hover:bg-opacity-75 transition-colors"
-                            aria-label="View fullscreen"
-                          >
-                            <FiMaximize2 className="w-5 h-5 text-white" />
-                          </button>
-                        </div>
-                        <RobustImage
-                          src={generatedResults[3].generatedImage}
-                          alt="Oldest design"
-                        />
-                      </div>
-                    ) : null}
-                  </div>
-                )}
-              </div>
-            </div>
-          ) : (
-            // Clean, minimal placeholder when no images are generated
-            <div className="w-full h-full flex flex-col items-center justify-center text-center p-6 bg-gray-100 rounded-xl shadow-sm">
-              <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center mb-4 shadow">
-                <MdPhotoLibrary className="w-8 h-8 text-gray-500" />
-              </div>
-              <h2 className="text-xl font-medium text-gray-800 mb-2">
-                Generated renders will appear here
-              </h2>
-              <p className="text-gray-500 text-sm max-w-md">
-                Ready to bring your vision to life? Get started on the left to
-                create your own custom renders.
-              </p>
-            </div>
-          )}
+        {/* Image display area */}
+        <div className="flex-1 relative rounded-lg overflow-hidden bg-black">
+          {modalContent}
         </div>
       </div>
-
-      {/* Image Modal */}
-      {modalImage && (
-        <div className="fixed inset-0 z-50 bg-black bg-opacity-90 flex items-center justify-center">
-          {/* Container with centered content */}
-          <div className="relative w-full max-w-5xl mx-auto flex items-center justify-center p-4">
-            {/* White box sized to fit content */}
-            <div className="relative bg-white rounded-lg shadow-2xl w-full overflow-hidden flex flex-col">
-              {/* Close button absolutely positioned in the corner */}
-              <button
-                onClick={closeImageModal}
-                className="absolute top-2 right-2 z-30 bg-gray-700 hover:bg-gray-600 rounded-full p-1.5 text-white transition-all shadow-lg"
-                aria-label="Close image"
-              >
-                <FiX className="w-4 h-4" />
-              </button>
-
-              {/* Comparison controls at top */}
-              {currentResultIndex !== null && (
-                <div className="absolute top-4 left-0 right-0 z-20 flex justify-center">
-                  <div className="inline-flex rounded-lg bg-gray-700 p-1">
-                    <button
-                      onClick={() => setComparisonView("before")}
-                      className={`px-4 py-2 text-sm rounded-l-lg transition-all ${
-                        viewMode === "before"
-                          ? "bg-gray-900 text-white"
-                          : "text-gray-300 hover:text-white"
-                      }`}
-                    >
-                      Before
-                    </button>
-                    <button
-                      onClick={() => setComparisonView("side-by-side")}
-                      className={`px-4 py-2 text-sm transition-all ${
-                        viewMode === "side-by-side"
-                          ? "bg-gray-900 text-white"
-                          : "text-gray-300 hover:text-white"
-                      }`}
-                    >
-                      Side By Side
-                    </button>
-                    <button
-                      onClick={() => setComparisonView("after")}
-                      className={`px-4 py-2 text-sm rounded-r-lg transition-all ${
-                        viewMode === "after"
-                          ? "bg-gray-900 text-white"
-                          : "text-gray-300 hover:text-white"
-                      }`}
-                    >
-                      After
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {/* Image container with appropriate padding */}
-              <div
-                className="flex items-center justify-center p-6 pt-16"
-                style={{
-                  height: viewMode === "side-by-side" ? "auto" : "auto",
-                }}
-              >
-                {renderComparisonView()}
-              </div>
-
-              {/* Action buttons at bottom */}
-              <div className="pb-6 pt-0 flex justify-center gap-4">
-                {/* Delete button */}
-                <button
-                  onClick={() => deleteImage(modalImage)}
-                  className="bg-gray-700 rounded-full px-4 py-2 text-white hover:bg-gray-600 transition-all shadow-lg flex items-center justify-center gap-2"
-                  aria-label="Delete image"
-                >
-                  <FiTrash2 className="w-4 h-4" />
-                  <span>Delete</span>
-                </button>
-
-                {/* Download button */}
-                <button
-                  onClick={() => {
-                    // Pass the current image URL and its index to the download function
-                    if (modalImage && currentResultIndex !== null) {
-                      downloadImage(modalImage, currentResultIndex);
-                    } else {
-                      // Fallback or error if modal isn't open correctly
-                      console.error(
-                        "Modal image or index not available for download."
-                      );
-                      toast.error("Cannot download image: Invalid state.");
-                    }
-                  }}
-                  className="bg-gray-700 rounded-full px-4 py-2 text-white hover:bg-gray-600 transition-all shadow-lg flex items-center justify-center gap-2"
-                  aria-label="Download image"
-                >
-                  <FiDownload className="w-4 h-4" />
-                  <span>Download</span>
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

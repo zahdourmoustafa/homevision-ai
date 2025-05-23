@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
-import { InteractiveHoverButton } from "@/components/ui/interactive-hover-button";
+import Image from "next/image";
 
 interface ToolCardProps {
   title: string;
@@ -36,7 +36,13 @@ export function ToolCard({
       )}
     >
       <div className="relative h-48 mb-4">
-        <img src={image} alt={title} className="w-full h-full object-cover" />
+        <Image
+          src={image}
+          alt={title}
+          layout="fill"
+          objectFit="cover"
+          unoptimized
+        />
         {badge && (
           <Badge
             className={cn(

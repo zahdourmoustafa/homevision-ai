@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useRef, useEffect } from "react";
-import { motion } from "framer-motion";
+import Image from "next/image";
 
 interface BeforeAfterSliderProps {
   beforeImage: string;
@@ -19,8 +19,6 @@ const BeforeAfterSlider: React.FC<BeforeAfterSliderProps> = ({
   const [sliderPosition, setSliderPosition] = useState(50);
   const containerRef = useRef<HTMLDivElement>(null);
   const isDragging = useRef(false);
-  const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
-  const [imageSize, setImageSize] = useState({ width: 0, height: 0 });
   const [isLoaded, setIsLoaded] = useState(false);
 
   // Save container dimensions on load and resize
@@ -28,7 +26,6 @@ const BeforeAfterSlider: React.FC<BeforeAfterSliderProps> = ({
     const updateDimensions = () => {
       if (containerRef.current) {
         const { width, height } = containerRef.current.getBoundingClientRect();
-        setContainerSize({ width, height });
       }
     };
 
@@ -42,8 +39,8 @@ const BeforeAfterSlider: React.FC<BeforeAfterSliderProps> = ({
 
   // Preload both images to get their natural dimensions
   useEffect(() => {
-    let beforeImg = new Image();
-    let afterImg = new Image();
+    const beforeImg = new Image();
+    const afterImg = new Image();
     let loadedCount = 0;
 
     const checkAllLoaded = () => {
@@ -58,7 +55,6 @@ const BeforeAfterSlider: React.FC<BeforeAfterSliderProps> = ({
           beforeImg.naturalHeight,
           afterImg.naturalHeight
         );
-        setImageSize({ width: maxWidth, height: maxHeight });
         setIsLoaded(true);
       }
     };
@@ -167,10 +163,13 @@ const BeforeAfterSlider: React.FC<BeforeAfterSliderProps> = ({
           <div className="relative w-full h-full flex items-center justify-center">
             {/* After Image */}
             <div className="absolute inset-0 flex items-center justify-center">
-              <img
+              <Image
                 src={afterImage}
                 alt={afterLabel}
+                layout="fill"
+                objectFit="cover"
                 className="w-full h-full object-cover"
+                unoptimized
               />
             </div>
 
@@ -181,10 +180,13 @@ const BeforeAfterSlider: React.FC<BeforeAfterSliderProps> = ({
                 clipPath: `inset(0 ${100 - sliderPosition}% 0 0)`,
               }}
             >
-              <img
+              <Image
                 src={beforeImage}
                 alt={beforeLabel}
+                layout="fill"
+                objectFit="cover"
                 className="w-full h-full object-cover"
+                unoptimized
               />
             </div>
 

@@ -14,6 +14,7 @@ import BeforeAfterSliderComponent from "../create-new/_components/BeforeAfterSli
 import { MdPhotoLibrary } from "react-icons/md";
 import { useUser } from "@clerk/nextjs";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import Image from "next/image";
 
 interface GeneratedResult {
   generatedImage: string;
@@ -30,10 +31,7 @@ function SketchCreateNew() {
     additionalRequirement: "",
   });
   const [isLoading, setIsLoading] = useState(false);
-  const [generatedImage, setGeneratedImage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [rawImageUrl, setRawImageUrl] = useState<string | null>(null);
-  const [showSlider, setShowSlider] = useState(false);
   const { user } = useUser();
   const [generatedResults, setGeneratedResults] = useState<GeneratedResult[]>(
     []
@@ -109,11 +107,10 @@ function SketchCreateNew() {
       setIsLoading(true);
       setError(null);
 
-      const rawImageUrl = await saveRawImageToSupabase(selectedFile);
-      setRawImageUrl(rawImageUrl);
+      const rawImgUrl = await saveRawImageToSupabase(selectedFile);
 
       const result = await axios.post("/api/sketch-to-real", {
-        imageUrl: rawImageUrl,
+        imageUrl: rawImgUrl,
         roomType: formData.room,
         design: formData.design,
         additionalRequirement: formData.additionalRequirement,
@@ -127,7 +124,6 @@ function SketchCreateNew() {
       };
 
       setGeneratedResults((prev) => [...prev.slice(-3), newResult]);
-      setGeneratedImage(result.data.result);
       toast.success("Sketch converted successfully!");
     } catch (error) {
       console.error("Error converting sketch:", error);
@@ -218,10 +214,12 @@ function SketchCreateNew() {
                       onClick={() => setActiveSlider(result)}
                     >
                       <div className="relative rounded-lg overflow-hidden aspect-video">
-                        <img
+                        <Image
                           src={result.generatedImage}
                           alt={`Generated room ${index + 1}`}
-                          className="w-full h-full object-cover"
+                          layout="fill"
+                          objectFit="cover"
+                          unoptimized
                         />
                         <div className="absolute bottom-4 left-4 bg-black/70 text-white px-3 py-1 rounded-full text-sm">
                           Click to compare

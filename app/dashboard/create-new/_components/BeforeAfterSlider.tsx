@@ -5,7 +5,6 @@ import ReactBeforeSliderComponent from "react-before-after-slider-component";
 import "react-before-after-slider-component/dist/build.css";
 import { Button } from "@/components/ui/button";
 import { Download, SplitSquareHorizontal, Heart } from "lucide-react";
-import { DialogContent } from "@/components/ui/dialog";
 import {
   Tooltip,
   TooltipContent,
@@ -105,7 +104,7 @@ const BeforeAfterSliderComponent: React.FC<BeforeAfterSliderProps> = ({
         try {
           const errorJson = await response.json();
           errorBody = errorJson.error || JSON.stringify(errorJson);
-        } catch (jsonError) {
+        } catch (e) {
           // If response is not JSON, use status text
           errorBody = response.statusText;
         }
@@ -135,10 +134,12 @@ const BeforeAfterSliderComponent: React.FC<BeforeAfterSliderProps> = ({
       window.URL.revokeObjectURL(blobUrl);
 
       toast.success("Download started!");
-    } catch (error: any) {
+    } catch (error) {
       console.error("Error downloading image:", error);
       toast.error(
-        `Failed to download image: ${error.message || "Please try again."}`
+        `Failed to download image: ${
+          (error as Error).message || "Please try again."
+        }`
       );
     }
   };

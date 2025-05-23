@@ -2,7 +2,7 @@
 
 import React, { useState, useRef, ChangeEvent, useCallback, memo } from 'react';
 import Image from 'next/image';
-import { FiUploadCloud, FiX } from 'react-icons/fi';
+import { FiX } from 'react-icons/fi';
 import { MdPhotoLibrary } from 'react-icons/md';
 
 interface ImageSelectionProps {

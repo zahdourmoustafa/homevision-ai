@@ -21,10 +21,10 @@ type LumaResponse = {
     prompt: string;
     aspect_ratio: string;
     callback_url: string | null;
-    image_ref: any | null;
-    style_ref: any | null;
-    character_ref: any | null;
-    modify_image_ref: any | null;
+    image_ref: string | { url: string; weight?: number } | null;
+    style_ref: string | { url: string; weight?: number } | null;
+    character_ref: string | { url: string; weight?: number } | null;
+    modify_image_ref: string | { url: string; weight?: number } | null;
   };
 };
 
@@ -57,33 +57,6 @@ const convertImageUrlToBase64 = async (imageUrl: string): Promise<string> => {
       );
     }
     throw new Error("Failed to convert image to Base64");
-  }
-};
-
-// Add new function to validate and preprocess image
-const preprocessImage = async (imageUrl: string): Promise<string> => {
-  try {
-    // Fetch the image
-    const response = await axios.get(imageUrl, {
-      responseType: "arraybuffer",
-    });
-
-    // Process image with sharp
-    const processedBuffer = await sharp(response.data)
-      .resize(1024, 1024, {
-        // Resize to model's expected dimensions
-        fit: "inside",
-        withoutEnlargement: true,
-      })
-      .toFormat("jpeg", { quality: 90 }) // Convert to JPEG
-      .toBuffer();
-
-    // Convert processed image to Base64
-    const base64Image = processedBuffer.toString("base64");
-    return `data:image/jpeg;base64,${base64Image}`;
-  } catch (error) {
-    console.error("Error preprocessing image:", error);
-    throw new Error("Failed to preprocess image");
   }
 };
 
@@ -120,7 +93,7 @@ const uploadBase64ImageToSupabase = async (
       : `${fileName}${extension}`;
 
     // Upload the buffer to Supabase Storage
-    const { data, error } = await supabase.storage
+    const { error } = await supabase.storage
       .from("interior-images")
       .upload(`generated/${finalFileName}`, buffer, {
         contentType,
@@ -258,13 +231,12 @@ export async function POST(req: Request) {
 
     // Preprocess the image to make it suitable for the AI
     console.log("Preprocessing image...");
-    const processedImageUrl = imageUrl; // You may need to handle this differently for Luma
 
     // Prepare the prompt for Luma AI
     const prompt = `Transform this ${roomType} into a stunning, photorealistic interior in ${design} style. Render the space in ultra-high detail (4K), preserving its architectural layout and key furniture positions.
 
     🛑 **STRICT CONSTRAINTS**:
-    - Do NOT change the room’s geometry — maintain all walls, angles, alcoves, and proportions exactly as in the original.
+    - Do NOT change the room's geometry — maintain all walls, angles, alcoves, and proportions exactly as in the original.
     - Do NOT add or remove windows or doors. Use curtains or blinds ONLY on existing windows.
     - DO NOT move or rotate major furniture: beds, sofas, wardrobes, desks, kitchen counters, etc. Keep them in their original positions and orientations.
     - You MAY restyle these furniture pieces to match the new design.
@@ -274,12 +246,12 @@ export async function POST(req: Request) {
     - Apply the ${design} style with authentic materials, textures, and a cohesive color palette.
     - Ensure the design feels elevated, livable, and magazine-worthy.
     - Add style-appropriate decor: ${
-        roomType === "bedroom"
-          ? "plants, soft bedding, artistic wall decor"
-          : roomType === "living room"
-          ? "lighting, textiles, coffee table books, cushions"
-          : "functional yet elegant accents"
-      }.
+      roomType === "bedroom"
+        ? "plants, soft bedding, artistic wall decor"
+        : roomType === "living room"
+        ? "lighting, textiles, coffee table books, cushions"
+        : "functional yet elegant accents"
+    }.
     
     📸 **Rendering Specifications**:
     - 4K photorealism with balanced natural and artificial light
@@ -293,8 +265,8 @@ export async function POST(req: Request) {
         : ""
     }
     
-    The final output should reflect expert interior design, preserving the room’s spatial logic while expressing the chosen style with precision and elegance.`;
-    
+    The final output should reflect expert interior design, preserving the room's spatial logic while expressing the chosen style with precision and elegance.`;
+
     console.log("Calling Luma AI API with prompt:", prompt);
 
     // Call the Luma AI API
