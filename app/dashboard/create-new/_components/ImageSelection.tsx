@@ -39,16 +39,16 @@ const ImageSelection = memo(({ onFileSelected }: ImageSelectionProps) => {
 
   return (
     <div className="space-y-2 px-8 py-4">
-      <h2 className="text-xl font-semibold text-gray-900 mb-4">Upload Image</h2>
+      <h2 className="text-xl font-semibold text-themeTextWhite mb-4">Upload Image</h2>
       <div className="relative">
         {preview ? (
-          <div className="relative w-full h-[200px] border rounded-lg overflow-hidden">
+          <div className="relative w-full h-[200px] border rounded-lg overflow-hidden border-themeGray">
             <button
               onClick={handleRemoveImage}
-              className="absolute top-2 right-2 z-10 p-1 rounded-full bg-white/80 hover:bg-white transition-colors"
+              className="absolute top-2 right-2 z-10 p-1 rounded-full bg-black hover:bg-themeGray transition-colors"
               type="button"
             >
-              <FiX className="w-5 h-5 text-gray-700" />
+              <FiX className="w-5 h-5 text-themeTextWhite" />
             </button>
             <Image 
               src={preview} 
@@ -63,12 +63,12 @@ const ImageSelection = memo(({ onFileSelected }: ImageSelectionProps) => {
         ) : (
           <label
             htmlFor="upload-image"
-            className="relative flex flex-col items-center justify-center w-full h-[200px] border-2 border-dashed border-gray-300 rounded-lg cursor-pointer bg-gray-50 hover:bg-gray-100 transition-all duration-300 ease-in-out"
+            className="relative flex flex-col items-center justify-center w-full h-[200px] border-2 border-dashed border-themeGray rounded-lg cursor-pointer bg-themeGray hover:bg-black transition-all duration-300 ease-in-out"
           >
             <div className="flex flex-col items-center justify-center p-2">
-              <MdPhotoLibrary className="w-8 h-8 text-gray-400" />
-              <p className="text-sm font-medium text-gray-600 mt-2">Upload a photo of your room</p>
-              <p className="text-xs text-gray-500">PNG, JPG up to 10MB</p>
+              <MdPhotoLibrary className="w-8 h-8 text-themeTextGray" />
+              <p className="text-sm font-medium text-themeTextWhite mt-2">Upload a photo of your room</p>
+              <p className="text-xs text-themeTextGray">PNG, JPG up to 10MB</p>
             </div>
           </label>
         )}

@@ -1,15 +1,32 @@
 import { NextResponse } from "next/server";
-import Replicate from "replicate";
 import axios from "axios"; // Use Axios for fetching the image
 import { supabase } from "@/lib/supabase"; // Import your Supabase client
-import sharp from 'sharp';
+import sharp from "sharp";
 
-// Define the Replicate API response type
-type ReplicateResponse = string[] | string | { output?: string };
-
-const replicate = new Replicate({
-  auth: process.env.NEXT_PUBLIC_REPLICATE_API_TOKEN,
-});
+// Define the Luma API response type
+type LumaResponse = {
+  id: string;
+  type: string;
+  state: string;
+  failure_reason: string | null;
+  created_at: string;
+  assets: {
+    video: string | null;
+    image: string | null;
+  };
+  model: string;
+  request: {
+    type: string;
+    model: string;
+    prompt: string;
+    aspect_ratio: string;
+    callback_url: string | null;
+    image_ref: any | null;
+    style_ref: any | null;
+    character_ref: any | null;
+    modify_image_ref: any | null;
+  };
+};
 
 // Separate function to convert an image URL to Base64
 const convertImageUrlToBase64 = async (imageUrl: string): Promise<string> => {
@@ -20,8 +37,8 @@ const convertImageUrlToBase64 = async (imageUrl: string): Promise<string> => {
       timeout: 15000, // 15 second timeout
       maxRedirects: 5,
       headers: {
-        'Accept': 'image/webp,image/png,image/jpeg,image/*',
-      }
+        Accept: "image/webp,image/png,image/jpeg,image/*",
+      },
     });
 
     // Convert the binary buffer to a Base64 string
@@ -35,7 +52,9 @@ const convertImageUrlToBase64 = async (imageUrl: string): Promise<string> => {
   } catch (error) {
     console.error("Error converting image to Base64:", error);
     if (axios.isAxiosError(error) && error.response) {
-      throw new Error(`Failed to fetch image: ${error.response.status} ${error.response.statusText}`);
+      throw new Error(
+        `Failed to fetch image: ${error.response.status} ${error.response.statusText}`
+      );
     }
     throw new Error("Failed to convert image to Base64");
   }
@@ -46,83 +65,167 @@ const preprocessImage = async (imageUrl: string): Promise<string> => {
   try {
     // Fetch the image
     const response = await axios.get(imageUrl, {
-      responseType: 'arraybuffer',
+      responseType: "arraybuffer",
     });
 
     // Process image with sharp
     const processedBuffer = await sharp(response.data)
-      .resize(1024, 1024, { // Resize to model's expected dimensions
-        fit: 'inside',
-        withoutEnlargement: true
+      .resize(1024, 1024, {
+        // Resize to model's expected dimensions
+        fit: "inside",
+        withoutEnlargement: true,
       })
-      .toFormat('jpeg', { quality: 90 }) // Convert to JPEG
+      .toFormat("jpeg", { quality: 90 }) // Convert to JPEG
       .toBuffer();
 
     // Convert processed image to Base64
-    const base64Image = processedBuffer.toString('base64');
+    const base64Image = processedBuffer.toString("base64");
     return `data:image/jpeg;base64,${base64Image}`;
   } catch (error) {
-    console.error('Error preprocessing image:', error);
-    throw new Error('Failed to preprocess image');
+    console.error("Error preprocessing image:", error);
+    throw new Error("Failed to preprocess image");
   }
 };
 
 // Function to upload a Base64 image to Supabase Storage
-const uploadBase64ImageToSupabase = async (base64Image: string, fileName: string) => {
+const uploadBase64ImageToSupabase = async (
+  base64Image: string,
+  fileName: string
+) => {
   try {
     // Remove the data URL prefix and get content type
-    const [header, base64Data] = base64Image.split('base64,');
-    const contentType = header.split(':')[1].split(';')[0];
+    const [header, base64Data] = base64Image.split("base64,");
+    const contentType = header.split(":")[1].split(";")[0];
 
     // Convert Base64 to Buffer
-    const buffer = Buffer.from(base64Data, 'base64');
+    const buffer = Buffer.from(base64Data, "base64");
 
     // Ensure the filename has the correct extension based on content type
     const getExtension = (contentType: string) => {
       switch (contentType) {
-        case 'image/webp': return '.webp';
-        case 'image/png': return '.png';
-        case 'image/jpeg': return '.jpg';
-        default: return '.png';
+        case "image/webp":
+          return ".webp";
+        case "image/png":
+          return ".png";
+        case "image/jpeg":
+          return ".jpg";
+        default:
+          return ".png";
       }
     };
 
     const extension = getExtension(contentType);
-    const finalFileName = fileName.endsWith(extension) ? fileName : `${fileName}${extension}`;
+    const finalFileName = fileName.endsWith(extension)
+      ? fileName
+      : `${fileName}${extension}`;
 
     // Upload the buffer to Supabase Storage
     const { data, error } = await supabase.storage
-      .from('interior-images')
+      .from("interior-images")
       .upload(`generated/${finalFileName}`, buffer, {
         contentType,
-        cacheControl: '3600',
-        upsert: true
+        cacheControl: "3600",
+        upsert: true,
       });
 
     if (error) {
-      console.error('Supabase storage upload error:', error);
+      console.error("Supabase storage upload error:", error);
       throw error;
     }
 
     // Get the public URL
     const { data: publicUrlData } = supabase.storage
-      .from('interior-images')
+      .from("interior-images")
       .getPublicUrl(`generated/${finalFileName}`);
 
     if (!publicUrlData.publicUrl) {
-      throw new Error('Failed to get public URL');
+      throw new Error("Failed to get public URL");
     }
 
     return publicUrlData.publicUrl;
   } catch (error) {
-    console.error('Error uploading image to Supabase:', error);
+    console.error("Error uploading image to Supabase:", error);
+    throw error;
+  }
+};
+
+// Function to call Luma AI API and wait for completion
+const generateImageWithLuma = async (
+  imageUrl: string,
+  prompt: string
+): Promise<string> => {
+  try {
+    // First, we need to upload the input image to get a URL Luma can access
+    // For this implementation, we'll assume the imageUrl is already accessible to Luma
+
+    // Call Luma API to initiate the generation
+    const response = await axios.post(
+      "https://api.lumalabs.ai/dream-machine/v1/generations/image",
+      {
+        prompt: prompt,
+        aspect_ratio: "16:9", // You can make this configurable
+        model: "photon-1", // Default model
+        modify_image_ref: {
+          url: imageUrl,
+          weight: 0.8, // Control how much to preserve from original
+        },
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${process.env.LUMA_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+      }
+    );
+
+    const generationId = response.data.id;
+    console.log(`Generation initiated with ID: ${generationId}`);
+
+    // Poll for completion
+    let attempts = 0;
+    const maxAttempts = 60; // 5 minutes max with 5-second intervals
+
+    while (attempts < maxAttempts) {
+      await new Promise((resolve) => setTimeout(resolve, 5000)); // Wait 5 seconds between polls
+
+      const statusResponse = await axios.get(
+        `https://api.lumalabs.ai/dream-machine/v1/generations/${generationId}`,
+        {
+          headers: {
+            Authorization: `Bearer ${process.env.LUMA_API_KEY}`,
+            Accept: "application/json",
+          },
+        }
+      );
+
+      const generation = statusResponse.data as LumaResponse;
+
+      if (generation.state === "completed" && generation.assets.image) {
+        console.log("Generation completed successfully");
+        return generation.assets.image;
+      } else if (generation.state === "failed") {
+        throw new Error(
+          `Generation failed: ${generation.failure_reason || "Unknown reason"}`
+        );
+      }
+
+      attempts++;
+      console.log(
+        `Waiting for generation to complete... (${attempts}/${maxAttempts})`
+      );
+    }
+
+    throw new Error("Generation timed out");
+  } catch (error) {
+    console.error("Error generating image with Luma:", error);
     throw error;
   }
 };
 
 export async function POST(req: Request) {
   try {
-    const { imageUrl, roomType, design, additionalRequirement, userEmail } = await req.json();
+    const { imageUrl, roomType, design, additionalRequirement, userEmail } =
+      await req.json();
 
     // Validate user email
     if (!userEmail) {
@@ -143,110 +246,124 @@ export async function POST(req: Request) {
     // Validate the input
     if (!imageUrl || !roomType || !design) {
       const missingFields = [];
-      if (!imageUrl) missingFields.push('imageUrl');
-      if (!roomType) missingFields.push('roomType');
-      if (!design) missingFields.push('design');
-      
+      if (!imageUrl) missingFields.push("imageUrl");
+      if (!roomType) missingFields.push("roomType");
+      if (!design) missingFields.push("design");
+
       return NextResponse.json(
-        { error: `Missing required fields: ${missingFields.join(', ')}` },
+        { error: `Missing required fields: ${missingFields.join(", ")}` },
         { status: 400 }
       );
     }
 
-    // Preprocess the image
+    // Preprocess the image to make it suitable for the AI
     console.log("Preprocessing image...");
-    const processedImageBase64 = await preprocessImage(imageUrl);
+    const processedImageUrl = imageUrl; // You may need to handle this differently for Luma
 
-    // Prepare the input for the Replicate API
-    const input = {
-      image: processedImageBase64,
-      prompt: `Transform this ${roomType} into a stunning ${design} style interior. Create a photorealistic, high-quality interior design with professional lighting, proper scale and proportions. Include ${design}-specific design elements, materials, and furniture that are cohesive with the style. Ensure natural-looking textures, shadows, and reflections. ${additionalRequirement ? `Additionally, incorporate the following requirements: ${additionalRequirement}.` : ''} Maintain architectural integrity and create an inviting, livable space.`,
-    };
+    // Prepare the prompt for Luma AI
+    const prompt = `Transform this ${roomType} into a stunning, photorealistic interior in ${design} style. Render the space in ultra-high detail (4K), preserving its architectural layout and key furniture positions.
 
-    console.log("Calling Replicate API with input:", input);
-
-    // Call the Replicate API and cast the response to the defined type
-    const output = (await replicate.run(
-      "adirik/interior-design:76604baddc85b1b4616e1c6475eca080da339c8875bd4996705440484a6eac38",
-      { input }
-    )) as ReplicateResponse;
-
-    // const output =("https://kdpyeejozxawkdgemsjp.supabase.co/storage/v1/object/public/interior-images/generated-1737225634359.png") as ReplicateResponse;
-
-    console.log("Replicate API response:", output); // Log the entire response
-
-    // Extract the image URL from the Replicate API response
-    let generatedImageUrl: string;
-
-    if (Array.isArray(output) && output.length > 0) {
-      // If the response is an array of URLs, take the first one
-      generatedImageUrl = output[0];
-    } else if (typeof output === "string") {
-      // If the response is a direct URL string
-      generatedImageUrl = output;
-    } else if (typeof output === "object" && output && 'output' in output && output.output) {
-      // If the response is an object with an "output" property
-      generatedImageUrl = output.output;
-    } else {
-      throw new Error("Invalid response from Replicate API: Image URL not found");
+    🛑 **STRICT CONSTRAINTS**:
+    - Do NOT change the room’s geometry — maintain all walls, angles, alcoves, and proportions exactly as in the original.
+    - Do NOT add or remove windows or doors. Use curtains or blinds ONLY on existing windows.
+    - DO NOT move or rotate major furniture: beds, sofas, wardrobes, desks, kitchen counters, etc. Keep them in their original positions and orientations.
+    - You MAY restyle these furniture pieces to match the new design.
+    - You MAY rearrange or replace small accents like side tables, rugs, lamps, plants, and decor.
+    
+    🎨 **Design Goals**:
+    - Apply the ${design} style with authentic materials, textures, and a cohesive color palette.
+    - Ensure the design feels elevated, livable, and magazine-worthy.
+    - Add style-appropriate decor: ${
+        roomType === "bedroom"
+          ? "plants, soft bedding, artistic wall decor"
+          : roomType === "living room"
+          ? "lighting, textiles, coffee table books, cushions"
+          : "functional yet elegant accents"
+      }.
+    
+    📸 **Rendering Specifications**:
+    - 4K photorealism with balanced natural and artificial light
+    - Realistic shadows, reflections, and material textures
+    - Wide-angle perspective that mirrors the original camera angle
+    - Professional visual style — suitable for use in architectural magazines
+    
+    ${
+      additionalRequirement
+        ? `📌 Additional User Requirement: ${additionalRequirement}`
+        : ""
     }
+    
+    The final output should reflect expert interior design, preserving the room’s spatial logic while expressing the chosen style with precision and elegance.`;
+    
+    console.log("Calling Luma AI API with prompt:", prompt);
 
-    console.log("Generated image URL from Replicate:", generatedImageUrl);
+    // Call the Luma AI API
+    const generatedImageUrl = await generateImageWithLuma(imageUrl, prompt);
+
+    console.log("Generated image URL from Luma:", generatedImageUrl);
 
     // Convert the generated image URL to Base64
     let base64Image;
     try {
       base64Image = await convertImageUrlToBase64(generatedImageUrl);
-      console.log('Image converted to Base64 successfully');
+      console.log("Image converted to Base64 successfully");
     } catch (error) {
-      console.error('Error converting image to Base64:', error);
-      return NextResponse.json({ error: 'Failed to process generated image' }, { status: 500 });
+      console.error("Error converting image to Base64:", error);
+      return NextResponse.json(
+        { error: "Failed to process generated image" },
+        { status: 500 }
+      );
     }
 
     // Upload to Supabase Storage with proper error handling
     let publicUrl;
     try {
-      const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.png`;
+      const fileName = `${Date.now()}-${Math.random()
+        .toString(36)
+        .substring(7)}.png`;
       publicUrl = await uploadBase64ImageToSupabase(base64Image, fileName);
-      console.log('Image uploaded to Supabase. Public URL:', publicUrl);
+      console.log("Image uploaded to Supabase. Public URL:", publicUrl);
     } catch (error) {
-      console.error('Error uploading to Supabase:', error);
-      return NextResponse.json({ error: 'Failed to upload generated image' }, { status: 500 });
+      console.error("Error uploading to Supabase:", error);
+      return NextResponse.json(
+        { error: "Failed to upload generated image" },
+        { status: 500 }
+      );
     }
 
     // Save to database with additional error handling
     try {
-      const { error: dbError } = await supabase
-        .from('rooms')
-        .insert([
-          {
-            image_url: imageUrl,
-            transformed_image_url: publicUrl, // Using the correct field name
-            room_type: roomType,
-            design_type: design,
-            additional_requirements: additionalRequirement,
-            user_email: userEmail,
-          },
-        ]);
+      const { error: dbError } = await supabase.from("rooms").insert([
+        {
+          image_url: imageUrl,
+          transformed_image_url: publicUrl, // Using the correct field name
+          room_type: roomType,
+          design_type: design,
+          additional_requirements: additionalRequirement,
+          user_email: userEmail,
+        },
+      ]);
 
       if (dbError) throw dbError;
     } catch (error) {
-      console.error('Database error:', error);
-      return NextResponse.json({ error: 'Failed to save room data' }, { status: 500 });
+      console.error("Database error:", error);
+      return NextResponse.json(
+        { error: "Failed to save room data" },
+        { status: 500 }
+      );
     }
 
     // Return success response with both URLs
-    return NextResponse.json({ 
+    return NextResponse.json({
       result: {
         original: imageUrl,
-        generated: publicUrl
-      }
+        generated: publicUrl,
+      },
     });
-
   } catch (e) {
-    console.error('Error in /api/redesign-room:', e);
+    console.error("Error in /api/redesign-room:", e);
     return NextResponse.json(
-      { error: e instanceof Error ? e.message : 'An unknown error occurred' },
+      { error: e instanceof Error ? e.message : "An unknown error occurred" },
       { status: 500 }
     );
   }

@@ -1,11 +1,11 @@
-"use client"
+"use client";
 
-import React, { useState, useEffect } from 'react';
-import ReactBeforeSliderComponent from 'react-before-after-slider-component';
-import 'react-before-after-slider-component/dist/build.css';
-import { Button } from '@/components/ui/button';
-import { Download, SplitSquareHorizontal, Heart } from 'lucide-react';
-import { DialogContent } from '@/components/ui/dialog';
+import React, { useState, useEffect } from "react";
+import ReactBeforeSliderComponent from "react-before-after-slider-component";
+import "react-before-after-slider-component/dist/build.css";
+import { Button } from "@/components/ui/button";
+import { Download, SplitSquareHorizontal, Heart } from "lucide-react";
+import { DialogContent } from "@/components/ui/dialog";
 import {
   Tooltip,
   TooltipContent,
@@ -13,7 +13,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { toast } from "sonner";
-import Image from 'next/image';
+import Image from "next/image";
 
 interface BeforeAfterSliderProps {
   beforeImage: string;
@@ -28,69 +28,124 @@ interface FavoriteImage {
   timestamp: number;
 }
 
-const BeforeAfterSliderComponent: React.FC<BeforeAfterSliderProps> = ({ 
-  beforeImage, 
+const BeforeAfterSliderComponent: React.FC<BeforeAfterSliderProps> = ({
+  beforeImage,
   afterImage,
-  onFavoriteChange 
+  onFavoriteChange,
 }) => {
   const [showComparison, setShowComparison] = useState(false);
   const [isFavorited, setIsFavorited] = useState(false);
 
   useEffect(() => {
-    const favorites = JSON.parse(localStorage.getItem('favorites') || '[]');
-    setIsFavorited(favorites.some((fav: FavoriteImage) => fav.imageUrl === afterImage));
+    const favorites = JSON.parse(localStorage.getItem("favorites") || "[]");
+    setIsFavorited(
+      favorites.some((fav: FavoriteImage) => fav.imageUrl === afterImage)
+    );
   }, [afterImage]);
 
   const FIRST_IMAGE = {
     imageUrl: beforeImage,
-    alt: "Original Room"
+    alt: "Original Room",
   };
   const SECOND_IMAGE = {
     imageUrl: afterImage,
-    alt: "Generated Room"
+    alt: "Generated Room",
   };
 
   const toggleFavorite = () => {
-    const favorites: FavoriteImage[] = JSON.parse(localStorage.getItem('favorites') || '[]');
-    
+    const favorites: FavoriteImage[] = JSON.parse(
+      localStorage.getItem("favorites") || "[]"
+    );
+
     if (isFavorited) {
-      const updatedFavorites = favorites.filter(fav => fav.imageUrl !== afterImage);
-      localStorage.setItem('favorites', JSON.stringify(updatedFavorites));
+      const updatedFavorites = favorites.filter(
+        (fav) => fav.imageUrl !== afterImage
+      );
+      localStorage.setItem("favorites", JSON.stringify(updatedFavorites));
       setIsFavorited(false);
-      toast.success('Removed from favorites');
+      toast.success("Removed from favorites");
     } else {
       const newFavorite: FavoriteImage = {
         id: Date.now().toString(),
         imageUrl: afterImage,
         originalImage: beforeImage,
-        timestamp: Date.now()
+        timestamp: Date.now(),
       };
-      localStorage.setItem('favorites', JSON.stringify([...favorites, newFavorite]));
+      localStorage.setItem(
+        "favorites",
+        JSON.stringify([...favorites, newFavorite])
+      );
       setIsFavorited(true);
-      toast.success('Added to favorites');
+      toast.success("Added to favorites");
     }
     onFavoriteChange?.();
   };
 
-  const downloadImage = async (imageUrl: string) => {
+  const downloadImage = async (
+    imageUrl: string,
+    e: React.MouseEvent<HTMLButtonElement>
+  ) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    toast.info("Starting download...");
+
     try {
-      const response = await fetch(imageUrl);
+      const fileName = "redesigned-room.jpg";
+      const proxiedUrlString = `/api/download?url=${encodeURIComponent(
+        imageUrl
+      )}&filename=${fileName}`;
+
+      // Fetch the image data from our API route
+      const response = await fetch(proxiedUrlString);
+
+      if (!response.ok) {
+        // Try to get error message from response body
+        let errorBody = "Unknown error";
+        try {
+          const errorJson = await response.json();
+          errorBody = errorJson.error || JSON.stringify(errorJson);
+        } catch (jsonError) {
+          // If response is not JSON, use status text
+          errorBody = response.statusText;
+        }
+        throw new Error(
+          `Failed to fetch download: ${response.status} ${errorBody}`
+        );
+      }
+
+      // Get the blob data
       const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = 'redesigned-room.jpg';
+
+      // Create a temporary URL for the blob
+      const blobUrl = window.URL.createObjectURL(blob);
+
+      // Create a temporary link element to trigger the download
+      const link = document.createElement("a");
+      link.href = blobUrl;
+      link.download = fileName;
+      link.style.display = "none"; // Hide the link
+      document.body.appendChild(link); // Append to body to make it clickable
+
+      // Programmatically click the link
       link.click();
-      window.URL.revokeObjectURL(url);
-    } catch (error) {
-      console.error('Error downloading image:', error);
-      toast.error('Failed to download image');
+
+      // Clean up: remove the link and revoke the blob URL
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(blobUrl);
+
+      toast.success("Download started!");
+    } catch (error: any) {
+      console.error("Error downloading image:", error);
+      toast.error(
+        `Failed to download image: ${error.message || "Please try again."}`
+      );
     }
   };
 
   return (
     <div className="h-full flex flex-col">
-      <div className="relative flex-1 bg-gray-50 rounded-2xl overflow-hidden">
+      <div className="relative flex-1 bg-themeGray rounded-2xl overflow-hidden">
         {showComparison ? (
           <div className="w-full h-full flex items-center justify-center">
             <div className="relative w-full h-full">
@@ -114,7 +169,7 @@ const BeforeAfterSliderComponent: React.FC<BeforeAfterSliderProps> = ({
             />
           </div>
         )}
-        
+
         {/* Favorite button stays at top right */}
         <div className="absolute top-3 right-10">
           <TooltipProvider delayDuration={200}>
@@ -124,13 +179,19 @@ const BeforeAfterSliderComponent: React.FC<BeforeAfterSliderProps> = ({
                   onClick={toggleFavorite}
                   size="icon"
                   variant="secondary"
-                  className="bg-white/80 hover:bg-white backdrop-blur-sm rounded-full"
+                  className="bg-black hover:bg-themeGray backdrop-blur-sm rounded-full"
                 >
-                  <Heart className={`w-4 h-4 ${isFavorited ? 'fill-red-500 text-red-500' : ''}`} />
+                  <Heart
+                    className={`w-4 h-4 ${
+                      isFavorited
+                        ? "fill-red-500 text-red-500"
+                        : "text-themeTextWhite"
+                    }`}
+                  />
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="bottom">
-                {isFavorited ? 'Remove from favorites' : 'Add to favorites'}
+                {isFavorited ? "Remove from favorites" : "Add to favorites"}
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
@@ -145,30 +206,28 @@ const BeforeAfterSliderComponent: React.FC<BeforeAfterSliderProps> = ({
                   onClick={() => setShowComparison(!showComparison)}
                   size="icon"
                   variant="secondary"
-                  className="bg-white/80 hover:bg-white backdrop-blur-sm rounded-full"
+                  className="bg-black hover:bg-themeGray backdrop-blur-sm rounded-full"
                 >
-                  <SplitSquareHorizontal className="w-4 h-4" />
+                  <SplitSquareHorizontal className="w-4 h-4 text-themeTextWhite" />
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="top">
-                {showComparison ? 'Hide comparison' : 'Compare with original'}
+                {showComparison ? "Hide comparison" : "Compare with original"}
               </TooltipContent>
             </Tooltip>
 
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
-                  onClick={() => downloadImage(afterImage)}
+                  onClick={(e) => downloadImage(afterImage, e)}
                   size="icon"
                   variant="secondary"
-                  className="bg-white/80 hover:bg-white backdrop-blur-sm rounded-full"
+                  className="bg-black hover:bg-themeGray backdrop-blur-sm rounded-full"
                 >
-                  <Download className="w-4 h-4" />
+                  <Download className="w-4 h-4 text-themeTextWhite" />
                 </Button>
               </TooltipTrigger>
-              <TooltipContent side="top">
-                Download image
-              </TooltipContent>
+              <TooltipContent side="top">Download image</TooltipContent>
             </Tooltip>
           </TooltipProvider>
         </div>

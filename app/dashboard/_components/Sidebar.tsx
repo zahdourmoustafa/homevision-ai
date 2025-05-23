@@ -1,65 +1,115 @@
 "use client";
 
-import { Home, Layout, Box, Settings, Star, Code, UserCog, LogOut } from "lucide-react";
+import {
+  Home,
+  Image as ImageIcon,
+  DollarSign,
+  BookOpen,
+  Library,
+  Settings,
+  LogOut,
+  Crown,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
-import { useClerk } from "@clerk/nextjs";
-import Image from "next/image";
-import { usePathname } from "next/navigation";
-
-const menuItems = [
-  { icon: Home, label: "Dashboard", href: "/dashboard" },
-  { icon: Star, label: "Favorites", href: "/dashboard/favorites" },
-];
+import { Button } from "@/components/ui/button";
 
 export function Sidebar() {
-  const { openUserProfile, signOut } = useClerk();
-  const pathname = usePathname();
-  
   return (
-    <div className="w-64 h-screen bg-white p-4 fixed left-0 top-0 border-r border-gray-100 z-40">
-      <div className="flex items-center gap-2 mb-8">
-      <div className="flex gap-2 items-center">
-        <Image src={"/logo.svg"} width={40} height={40} alt="logo" />
-        <h2 className="font-bold text-lg text-gray-900">AI Roomify</h2>
+    <div className="h-full flex flex-col gap-y-6 p-4 bg-blue-950 text-indigo-100 overflow-y-auto">
+      <div className="flex items-center justify-center py-4">
+        <span className="text-2xl font-bold text-white">InteriorAI</span>
       </div>
-      </div>
-      
-      <div className="flex flex-col h-[calc(100%-6rem)] justify-between">
-        <nav className="space-y-1">
-          {menuItems.map((item) => (
-            <Link
-              key={item.label}
-              href={item.href}
-              className={cn(
-                "w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors",
-                pathname === item.href
-                  ? "bg-primary text-white"
-                  : "text-gray-600 hover:bg-gray-50"
-              )}
-            >
-              <item.icon className="w-5 h-5" />
-              <span>{item.label}</span>
-            </Link>
-          ))}
-        </nav>
 
-        <div className="border-t border-gray-100 pt-4 space-y-2">
-          <button
-            onClick={() => openUserProfile()}
-            className="w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors text-gray-600 hover:bg-gray-50"
+      <div className="flex flex-col items-center text-center gap-1 mb-4 px-2">
+        <Button className="mt-2 w-full bg-orange-500 hover:bg-orange-600 text-white font-semibold rounded-lg py-2">
+          <Crown className="mr-2 h-4 w-4" /> Upgrade to Pro
+        </Button>
+      </div>
+
+      <nav className="flex flex-col gap-y-1 flex-grow px-2">
+        <Link href="/dashboard">
+          <Button
+            variant="ghost"
+            className="w-full justify-start gap-x-3 text-indigo-100 hover:bg-indigo-800 hover:text-white rounded-lg px-3 py-2"
           >
-            <UserCog className="w-5 h-5" />
-            <span>Manage Account</span>
-          </button>
-          <button
-            onClick={() => signOut()}
-            className="w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors text-red-600 hover:bg-red-50"
+            <Home className="h-5 w-5" />
+            Home
+          </Button>
+        </Link>
+        <Link href="#">
+          <Button
+            variant="ghost"
+            className="w-full justify-start gap-x-3 text-indigo-100 hover:bg-indigo-800 hover:text-white rounded-lg px-3 py-2"
           >
-            <LogOut className="w-5 h-5" />
-            <span>Sign Out</span>
-          </button>
-        </div>
+            <ImageIcon className="h-5 w-5" />
+            Design Studio
+          </Button>
+        </Link>
+        <Link href="#">
+          <Button
+            variant="ghost"
+            className="w-full justify-start gap-x-3 text-indigo-100 hover:bg-indigo-800 hover:text-white rounded-lg px-3 py-2"
+          >
+            <ImageIcon className="h-5 w-5" />
+            My Gallery
+          </Button>
+        </Link>
+        <Link href="#">
+          <Button
+            variant="ghost"
+            className="w-full justify-start gap-x-3 text-indigo-100 hover:bg-indigo-800 hover:text-white rounded-lg px-3 py-2"
+          >
+            <DollarSign className="h-5 w-5" />
+            Pricing
+          </Button>
+        </Link>
+        <Link href="#">
+          <Button
+            variant="ghost"
+            className="w-full justify-start gap-x-3 text-indigo-100 hover:bg-indigo-800 hover:text-white rounded-lg px-3 py-2"
+          >
+            <BookOpen className="h-5 w-5" />
+            Tutorials
+          </Button>
+        </Link>
+        <Link href="#">
+          <Button
+            variant="ghost"
+            className="w-full justify-start gap-x-3 text-indigo-100 hover:bg-indigo-800 hover:text-white rounded-lg px-3 py-2"
+          >
+            <Library className="h-5 w-5" />
+            Surface Library
+          </Button>
+        </Link>
+        <Link href="#">
+          <Button
+            variant="ghost"
+            className="w-full justify-start gap-x-3 text-indigo-100 hover:bg-indigo-800 hover:text-white rounded-lg px-3 py-2"
+          >
+            <Library className="h-5 w-5" />
+            Product Library
+          </Button>
+        </Link>
+      </nav>
+
+      <div className="mt-auto flex flex-col gap-y-1 pb-4 px-2">
+        <Link href="#">
+          <Button
+            variant="ghost"
+            className="w-full justify-start gap-x-3 text-indigo-100 hover:bg-indigo-800 hover:text-white rounded-lg px-3 py-2"
+          >
+            <Settings className="h-5 w-5" />
+            Settings
+          </Button>
+        </Link>
+        <Button
+          variant="ghost"
+          className="w-full justify-start gap-x-3 text-indigo-100 hover:bg-indigo-800 hover:text-white rounded-lg px-3 py-2"
+        >
+          <LogOut className="h-5 w-5" />
+          Log Out
+        </Button>
       </div>
     </div>
   );

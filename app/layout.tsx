@@ -1,12 +1,10 @@
 import { Metadata } from "next";
 import "../app/globals.css";
-import { Poppins } from "next/font/google";
+import { Plus_Jakarta_Sans } from "next/font/google";
 import { ClerkProvider } from "@clerk/nextjs";
+import { ThemeProvider } from "@/components/theme";
 
-const poppins = Poppins({
-  weight: ["400", "700"],
-  subsets: ["latin"],
-});
+const jakarta = Plus_Jakarta_Sans({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
   title: "Create Next App",
@@ -20,9 +18,15 @@ export default function RootLayout({
 }>) {
   return (
     <ClerkProvider>
-      <html lang="en">
-        <body className={`${poppins.className} antialiased`}>
-          {children}
+      <html lang="en" suppressHydrationWarning>
+        <body className={jakarta.className}>
+          <ThemeProvider
+            attribute="class"
+            defaultTheme="light"
+            disableTransitionOnChange
+          >
+            {children}
+          </ThemeProvider>
         </body>
       </html>
     </ClerkProvider>
