@@ -6,6 +6,7 @@ import Link from "next/link";
 
 function Listing() {
   const userRoomList: never[] = [];
+  // const [userRoomList, setuserRoomList] = React.useState<never[]>([]); // setuserRoomList is unused
   return (
     <div>
       <div className="flex items-center justify-between">

@@ -6,12 +6,12 @@ import { UserDetailsContext, UserDetail } from "./_context/UserDetailContext";
 
 function Provider({ children }: { children: ReactNode }) {
   const { user } = useUser();
-  const [userDetail, setUserDetail] = useState<UserDetail>();
+  const [userDetail, setUserDetail] = useState<UserDetail | undefined>();
 
-  const VerifyUser = useCallback(async () => {
+  const verifyUserCallback = useCallback(async () => {
     if (!user) return;
     try {
-      const dataResult = await axios.post("/api/verify-user", { user: user });
+      const dataResult = await axios.post("/api/verify-user", { user });
       setUserDetail(dataResult.data.result);
     } catch (error) {
       console.error("Error verifying user:", error);
@@ -19,8 +19,8 @@ function Provider({ children }: { children: ReactNode }) {
   }, [user]);
 
   useEffect(() => {
-    VerifyUser();
-  }, [VerifyUser]);
+    verifyUserCallback();
+  }, [verifyUserCallback]);
 
   return (
     <UserDetailsContext.Provider value={{ userDetail, setUserDetail }}>

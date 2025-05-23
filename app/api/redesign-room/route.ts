@@ -27,6 +27,15 @@ type LumaResponse = {
   };
 };
 
+// Define the structure of the request body
+interface RedesignRequestBody {
+  imageUrl: string;
+  roomType: string;
+  design: string;
+  additionalRequirement?: string;
+  userEmail: string;
+}
+
 // Separate function to convert an image URL to Base64
 const convertImageUrlToBase64 = async (imageUrl: string): Promise<string> => {
   try {
@@ -63,7 +72,7 @@ const convertImageUrlToBase64 = async (imageUrl: string): Promise<string> => {
 const uploadBase64ImageToSupabase = async (
   base64Image: string,
   fileName: string
-) => {
+): Promise<string> => {
   try {
     // Remove the data URL prefix and get content type
     const [header, base64Data] = base64Image.split("base64,");
@@ -131,7 +140,7 @@ const generateImageWithLuma = async (
     // For this implementation, we'll assume the imageUrl is already accessible to Luma
 
     // Call Luma API to initiate the generation
-    const response = await axios.post(
+    const response = await axios.post<{ id: string }>(
       "https://api.lumalabs.ai/dream-machine/v1/generations/image",
       {
         prompt: prompt,
@@ -196,8 +205,13 @@ const generateImageWithLuma = async (
 
 export async function POST(req: Request) {
   try {
-    const { imageUrl, roomType, design, additionalRequirement, userEmail } =
-      await req.json();
+    const {
+      imageUrl,
+      roomType,
+      design,
+      additionalRequirement,
+      userEmail,
+    }: RedesignRequestBody = await req.json();
 
     // Validate user email
     if (!userEmail) {
@@ -268,74 +282,61 @@ export async function POST(req: Request) {
 
     console.log("Calling Luma AI API with prompt:", prompt);
 
-    // Call the Luma AI API
+    // Generate the image using Luma AI
+    console.log("Generating image with Luma AI...");
     const generatedImageUrl = await generateImageWithLuma(imageUrl, prompt);
-
     console.log("Generated image URL from Luma:", generatedImageUrl);
 
     // Convert the generated image URL to Base64
-    let base64Image;
-    try {
-      base64Image = await convertImageUrlToBase64(generatedImageUrl);
-      console.log("Image converted to Base64 successfully");
-    } catch (error) {
-      console.error("Error converting image to Base64:", error);
-      return NextResponse.json(
-        { error: "Failed to process generated image" },
-        { status: 500 }
-      );
-    }
-
-    // Upload to Supabase Storage with proper error handling
-    let publicUrl;
-    try {
-      const fileName = `${Date.now()}-${Math.random()
-        .toString(36)
-        .substring(7)}.png`;
-      publicUrl = await uploadBase64ImageToSupabase(base64Image, fileName);
-      console.log("Image uploaded to Supabase. Public URL:", publicUrl);
-    } catch (error) {
-      console.error("Error uploading to Supabase:", error);
-      return NextResponse.json(
-        { error: "Failed to upload generated image" },
-        { status: 500 }
-      );
-    }
-
-    // Save to database with additional error handling
-    try {
-      const { error: dbError } = await supabase.from("rooms").insert([
-        {
-          image_url: imageUrl,
-          transformed_image_url: publicUrl, // Using the correct field name
-          room_type: roomType,
-          design_type: design,
-          additional_requirements: additionalRequirement,
-          user_email: userEmail,
-        },
-      ]);
-
-      if (dbError) throw dbError;
-    } catch (error) {
-      console.error("Database error:", error);
-      return NextResponse.json(
-        { error: "Failed to save room data" },
-        { status: 500 }
-      );
-    }
-
-    // Return success response with both URLs
-    return NextResponse.json({
-      result: {
-        original: imageUrl,
-        generated: publicUrl,
-      },
-    });
-  } catch (e) {
-    console.error("Error in /api/redesign-room:", e);
-    return NextResponse.json(
-      { error: e instanceof Error ? e.message : "An unknown error occurred" },
-      { status: 500 }
+    const base64GeneratedImage = await convertImageUrlToBase64(
+      generatedImageUrl
     );
+
+    // Upload the Base64 image to Supabase
+    const uniqueFileName = `generated_room_${Date.now()}`;
+    const supabaseUrl = await uploadBase64ImageToSupabase(
+      base64GeneratedImage,
+      uniqueFileName
+    );
+    console.log("Uploaded to Supabase, URL:", supabaseUrl);
+
+    // Save the room data to the database
+    const { error: dbError } = await supabase.from("rooms").insert({
+      user_email: userEmail,
+      original_image_url: imageUrl,
+      redesigned_image_url: supabaseUrl, // Use the Supabase URL
+      room_type: roomType,
+      design_style: design,
+      additional_requirements: additionalRequirement,
+      created_at: new Date().toISOString(),
+    });
+
+    if (dbError) {
+      console.error("Database insert error:", dbError);
+      return NextResponse.json(
+        { error: "Failed to save room data", details: dbError.message },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json({
+      message: "Room redesigned and saved successfully",
+      originalImageUrl: imageUrl,
+      generatedImageUrl: supabaseUrl, // Return the Supabase URL
+    });
+  } catch (error) {
+    console.error("Full error object:", error);
+    let errorMessage = "An unexpected error occurred.";
+    let statusCode = 500;
+
+    if (axios.isAxiosError(error)) {
+      errorMessage = error.response?.data?.message || error.message;
+      statusCode = error.response?.status || 500;
+    } else if (error instanceof Error) {
+      errorMessage = error.message;
+    }
+
+    console.error("Error processing request:", errorMessage);
+    return NextResponse.json({ error: errorMessage }, { status: statusCode });
   }
 }

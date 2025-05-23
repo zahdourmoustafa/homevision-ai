@@ -20,8 +20,8 @@ export async function POST(req: Request) {
       .returning();
 
     return NextResponse.json(newRoom[0]);
-  } catch (e) {
-    console.error("Failed to create room", e);
+  } catch (error) {
+    console.error("Failed to create room", error);
     return NextResponse.json(
       { message: "Failed to create room" },
       { status: 500 }

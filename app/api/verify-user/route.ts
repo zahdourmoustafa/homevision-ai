@@ -3,9 +3,17 @@ import { NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
 
+interface ClerkUser {
+  primaryEmailAddress: {
+    emailAddress: string;
+  };
+  fullName?: string;
+  profileImageUrl?: string;
+}
+
 export async function POST(req: Request) {
   console.log("POST request received");
-  const { user } = await req.json();
+  const { user }: { user: ClerkUser } = await req.json();
   console.log("Received user data:", user);
 
   try {
@@ -13,7 +21,7 @@ export async function POST(req: Request) {
     const userInfo = await db
       .select()
       .from(users)
-      .where(eq(users.email, user?.primaryEmailAddress.emailAddress));
+      .where(eq(users.email, user.primaryEmailAddress.emailAddress));
     console.log("Database query result:", userInfo);
 
     if (userInfo?.length === 0) {
@@ -21,9 +29,9 @@ export async function POST(req: Request) {
       const SaveResult = await db
         .insert(users)
         .values({
-          email: user?.primaryEmailAddress.emailAddress,
-          name: user?.fullName,
-          imageurl: user?.profileImageUrl,
+          email: user.primaryEmailAddress.emailAddress,
+          name: user.fullName || "",
+          imageurl: user.profileImageUrl || "",
         })
         .returning({
           email: users.email,

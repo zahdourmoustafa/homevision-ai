@@ -1,5 +1,7 @@
 // filepath: /app/page.tsx
 import { UserButton } from "@clerk/nextjs";
+// import { User } from "lucide-react"; // User is unused
+// import Link from "next/link"; // Link is unused
 
 function HomePage() {
   return (

@@ -39,29 +39,29 @@ const BeforeAfterSlider: React.FC<BeforeAfterSliderProps> = ({
 
   // Preload both images to get their natural dimensions
   useEffect(() => {
-    const beforeImg = new window.Image();
-    const afterImg = new window.Image();
+    const localBeforeImg = new window.Image();
+    const localAfterImg = new window.Image();
     let loadedCount = 0;
 
     const checkAllLoaded = () => {
       loadedCount++;
       if (loadedCount === 2) {
         // Use the larger of the two images for consistent sizing
-        Math.max(beforeImg.naturalWidth, afterImg.naturalWidth);
-        Math.max(beforeImg.naturalHeight, afterImg.naturalHeight);
+        // Math.max(localBeforeImg.naturalWidth, localAfterImg.naturalWidth);
+        // Math.max(localBeforeImg.naturalHeight, localAfterImg.naturalHeight);
         setIsLoaded(true);
       }
     };
 
-    beforeImg.onload = checkAllLoaded;
-    afterImg.onload = checkAllLoaded;
+    localBeforeImg.onload = checkAllLoaded;
+    localAfterImg.onload = checkAllLoaded;
 
-    beforeImg.src = beforeImage;
-    afterImg.src = afterImage;
+    localBeforeImg.src = beforeImage;
+    localAfterImg.src = afterImage;
 
     return () => {
-      beforeImg.onload = null;
-      afterImg.onload = null;
+      localBeforeImg.onload = null;
+      localAfterImg.onload = null;
     };
   }, [beforeImage, afterImage]);
 

@@ -102,9 +102,9 @@ const BeforeAfterSliderComponent: React.FC<BeforeAfterSliderProps> = ({
         // Try to get error message from response body
         let errorBody = "Unknown error";
         try {
-          const errorJson = await response.json();
+          const errorJson: { error?: string } = await response.json();
           errorBody = errorJson.error || JSON.stringify(errorJson);
-        } catch {
+        } catch /* istanbul ignore next */ {
           // If response is not JSON, use status text
           errorBody = response.statusText;
         }
