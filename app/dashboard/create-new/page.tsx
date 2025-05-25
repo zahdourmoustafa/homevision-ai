@@ -18,8 +18,18 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { FiUpload, FiCheck, FiZoomIn, FiX } from "react-icons/fi";
+import {
+  FiUpload,
+  FiCheck,
+  FiZoomIn,
+  FiX,
+  FiDownload,
+  FiTrash2,
+  FiColumns,
+} from "react-icons/fi";
 import { roomTypes } from "@/lib/utils";
+import BeforeAfterSliderComponent from "./_components/BeforeAfterSlider";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 
 // Interface for the generated result
 interface GeneratedResult {
@@ -134,7 +144,12 @@ function CreateNew() {
   const [aiCreativity, setAiCreativity] = useState<number>(50); // Default to middle value
   const { user } = useUser();
   // Add new state for the image modal
-  const [modalImage, setModalImage] = useState<string | null>(null);
+  const [modalImageResult, setModalImageResult] =
+    useState<GeneratedResult | null>(null);
+  // State for BeforeAfterSlider
+  const [activeSlider, setActiveSlider] = useState<GeneratedResult | null>(
+    null
+  );
 
   // Design styles data with images
   const designStyles = [
@@ -191,8 +206,6 @@ function CreateNew() {
       setDesignType("");
     }
   }, [selectedDesignTypes]);
-
-
 
   // Handle file selection
   const handleFileSelected = (file: File) => {
@@ -393,14 +406,100 @@ function CreateNew() {
     }
   };
 
-  // Function to open modal with specific image
-  const openImageModal = (imageUrl: string) => {
-    setModalImage(imageUrl);
+  // Function to open modal with specific image result
+  const openImageModal = (result: GeneratedResult) => {
+    setModalImageResult(result);
   };
 
   // Function to close modal
   const closeImageModal = () => {
-    setModalImage(null);
+    setModalImageResult(null);
+  };
+
+  const openSliderModal = (result: GeneratedResult) => {
+    setActiveSlider(result);
+  };
+
+  const closeSliderModal = () => {
+    setActiveSlider(null);
+  };
+
+  const handleDownloadImage = async (
+    imageUrl: string,
+    originalFileName: string = "generated-image.jpg"
+  ) => {
+    if (!imageUrl) {
+      toast.error("Image URL is missing.");
+      return;
+    }
+    toast.info("Starting download...");
+    try {
+      // Extract a more meaningful filename if possible, otherwise use a default
+      let fileName = "redesigned-room.jpg";
+      try {
+        const urlParts = new URL(imageUrl).pathname.split("/");
+        const supabaseFileName = urlParts[urlParts.length - 1];
+        // basic check if it's a supabase url with a good filename
+        if (supabaseFileName && supabaseFileName.includes("_")) {
+          fileName = supabaseFileName;
+        } else {
+          // Fallback for other URLs or less descriptive supabase names
+          const nameParts = originalFileName.split(".");
+          const ext = nameParts.pop() || "jpg";
+          fileName = `${nameParts
+            .join("_")
+            .replace(/\s+/g, "_")}_redesigned.${ext}`;
+        }
+      } catch (e) {
+        console.warn("Could not parse filename from URL, using default.", e);
+      }
+
+      const response = await fetch(
+        `/api/download?url=${encodeURIComponent(
+          imageUrl
+        )}&filename=${encodeURIComponent(fileName)}`
+      );
+
+      if (!response.ok) {
+        let errorBody = "Unknown error";
+        try {
+          const errorJson: { error?: string } = await response.json();
+          errorBody = errorJson.error || JSON.stringify(errorJson);
+        } catch {
+          errorBody = response.statusText;
+        }
+        throw new Error(
+          `Failed to fetch for download: ${response.status} ${errorBody}`
+        );
+      }
+      const blob = await response.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = blobUrl;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(blobUrl);
+      toast.success("Download started!");
+    } catch (error) {
+      console.error("Error downloading image:", error);
+      toast.error(`Failed to download image: ${(error as Error).message}`);
+    }
+  };
+
+  const handleDeleteImage = (timestampToDelete: number) => {
+    setGeneratedResults((prevResults) =>
+      prevResults.filter((result) => result.timestamp !== timestampToDelete)
+    );
+    toast.success("Image removed from this session.");
+    // Note: This does not delete from Supabase storage.
+    // To implement permanent deletion, you'd need an API route:
+    // 1. Create an API route (e.g., /api/delete-image)
+    // 2. This route would take the image URL or storage path as a parameter.
+    // 3. Use Supabase admin client to delete the file from storage.
+    //    const { error } = await supabase.storage.from('interior-images').remove([filePath]);
+    // 4. Call this API route from here.
   };
 
   return (
@@ -639,177 +738,120 @@ function CreateNew() {
             <div className="w-full h-full flex items-center justify-center">
               {/* Always use a 2x2 grid layout that fills the viewport */}
               <div className="grid grid-cols-2 grid-rows-2 gap-2 w-full h-full max-h-[95vh] max-w-[95%]">
-                {/* Top Left - Loading State or Newest Image - always visible if loading or if image exists */}
-                {(isLoading || generatedResults[0]) && (
-                  <div className="relative bg-white rounded-xl overflow-hidden shadow-sm w-full h-full">
-                    {isLoading ? (
-                      <div className="w-full h-full flex flex-col items-center justify-center p-4 bg-gray-50">
-                        <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
-                          <MdPhotoLibrary className="w-8 h-8 text-gray-400" />
-                        </div>
-                        <h3 className="text-lg font-medium text-gray-700 mb-2">
-                          Crafting Your Visualization
-                        </h3>
-                        <div className="w-full max-w-xs bg-gray-200 h-2 rounded-full mt-2 overflow-hidden">
-                          <div
-                            className="h-full bg-orange-500 rounded-full animate-pulse"
-                            style={{ width: "65%" }}
-                          ></div>
-                        </div>
-                      </div>
-                    ) : generatedResults[0] ? (
-                      <div className="w-full h-full rounded-xl overflow-hidden group">
-                        <div className="absolute top-2 right-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <button
-                            onClick={() =>
-                              openImageModal(generatedResults[0].generatedImage)
-                            }
-                            className="bg-white rounded-full p-2 shadow-md hover:bg-gray-100 transition-colors"
-                            aria-label="Zoom image"
-                          >
-                            <FiZoomIn className="w-5 h-5 text-gray-700" />
-                          </button>
-                        </div>
-                        <RobustImage
-                          src={generatedResults[0].generatedImage}
-                          alt="Latest design"
-                        />
-                      </div>
-                    ) : null}
-                  </div>
-                )}
+                {/* Helper function to render each image cell with actions */}
+                {[
+                  isLoading ? null : generatedResults[0],
+                  isLoading && generatedResults[0]
+                    ? generatedResults[0]
+                    : !isLoading && generatedResults[1]
+                    ? generatedResults[1]
+                    : null,
+                  isLoading && generatedResults[1]
+                    ? generatedResults[1]
+                    : !isLoading && generatedResults[2]
+                    ? generatedResults[2]
+                    : null,
+                  isLoading && generatedResults[2]
+                    ? generatedResults[2]
+                    : !isLoading && generatedResults[3]
+                    ? generatedResults[3]
+                    : null,
+                ].map((result, index) => {
+                  const displayResult =
+                    isLoading && index === 0 ? null : result; // Show loader in first slot if loading, otherwise show result
+                  const imageAlt =
+                    isLoading && index === 0
+                      ? "Loading..."
+                      : displayResult
+                      ? index === 0
+                        ? "Latest design"
+                        : "Previous design"
+                      : "Empty slot";
 
-                {/* Top Right - First Image when loading or Second Newest Image - only visible if has content */}
-                {((isLoading && generatedResults[0]) ||
-                  (!isLoading && generatedResults[1])) && (
-                  <div className="relative bg-white rounded-xl overflow-hidden shadow-sm w-full h-full">
-                    {isLoading && generatedResults[0] ? (
-                      <div className="w-full h-full rounded-xl overflow-hidden group">
-                        <div className="absolute top-2 right-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <button
-                            onClick={() =>
-                              openImageModal(generatedResults[0].generatedImage)
-                            }
-                            className="bg-white rounded-full p-2 shadow-md hover:bg-gray-100 transition-colors"
-                            aria-label="Zoom image"
-                          >
-                            <FiZoomIn className="w-5 h-5 text-gray-700" />
-                          </button>
+                  if (isLoading && index === 0) {
+                    return (
+                      <div
+                        key={`loader-${index}`}
+                        className="relative bg-white rounded-xl overflow-hidden shadow-sm w-full h-full"
+                      >
+                        <div className="w-full h-full flex flex-col items-center justify-center p-4 bg-gray-50">
+                          <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
+                            <MdPhotoLibrary className="w-8 h-8 text-gray-400" />
+                          </div>
+                          <h3 className="text-lg font-medium text-gray-700 mb-2">
+                            Crafting Your Visualization
+                          </h3>
+                          <div className="w-full max-w-xs bg-gray-200 h-2 rounded-full mt-2 overflow-hidden">
+                            <div
+                              className="h-full bg-orange-500 rounded-full animate-pulse"
+                              style={{ width: "65%" }}
+                            ></div>
+                          </div>
                         </div>
-                        <RobustImage
-                          src={generatedResults[0].generatedImage}
-                          alt="Previous design"
-                        />
                       </div>
-                    ) : generatedResults[1] ? (
-                      <div className="w-full h-full rounded-xl overflow-hidden group">
-                        <div className="absolute top-2 right-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <button
-                            onClick={() =>
-                              openImageModal(generatedResults[1].generatedImage)
-                            }
-                            className="bg-white rounded-full p-2 shadow-md hover:bg-gray-100 transition-colors"
-                            aria-label="Zoom image"
-                          >
-                            <FiZoomIn className="w-5 h-5 text-gray-700" />
-                          </button>
-                        </div>
-                        <RobustImage
-                          src={generatedResults[1].generatedImage}
-                          alt="Previous design"
-                        />
-                      </div>
-                    ) : null}
-                  </div>
-                )}
+                    );
+                  }
 
-                {/* Bottom Left - Second image when loading or Third Newest Image - only visible if has content */}
-                {((isLoading && generatedResults[1]) ||
-                  (!isLoading && generatedResults[2])) && (
-                  <div className="relative bg-white rounded-xl overflow-hidden shadow-sm w-full h-full">
-                    {isLoading && generatedResults[1] ? (
-                      <div className="w-full h-full rounded-xl overflow-hidden group">
-                        <div className="absolute top-2 right-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <button
-                            onClick={() =>
-                              openImageModal(generatedResults[1].generatedImage)
-                            }
-                            className="bg-white rounded-full p-2 shadow-md hover:bg-gray-100 transition-colors"
-                            aria-label="Zoom image"
-                          >
-                            <FiZoomIn className="w-5 h-5 text-gray-700" />
-                          </button>
-                        </div>
-                        <RobustImage
-                          src={generatedResults[1].generatedImage}
-                          alt="Older design"
-                        />
-                      </div>
-                    ) : generatedResults[2] ? (
-                      <div className="w-full h-full rounded-xl overflow-hidden group">
-                        <div className="absolute top-2 right-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <button
-                            onClick={() =>
-                              openImageModal(generatedResults[2].generatedImage)
-                            }
-                            className="bg-white rounded-full p-2 shadow-md hover:bg-gray-100 transition-colors"
-                            aria-label="Zoom image"
-                          >
-                            <FiZoomIn className="w-5 h-5 text-gray-700" />
-                          </button>
-                        </div>
-                        <RobustImage
-                          src={generatedResults[2].generatedImage}
-                          alt="Older design"
-                        />
-                      </div>
-                    ) : null}
-                  </div>
-                )}
+                  if (!displayResult)
+                    return (
+                      <div
+                        key={`empty-${index}`}
+                        className="bg-gray-100 rounded-xl"
+                      />
+                    ); // Placeholder for empty slots if not loading
 
-                {/* Bottom Right - Third image when loading or Fourth Newest Image - only visible if has content */}
-                {((isLoading && generatedResults[2]) ||
-                  (!isLoading && generatedResults[3])) && (
-                  <div className="relative bg-white rounded-xl overflow-hidden shadow-sm w-full h-full">
-                    {isLoading && generatedResults[2] ? (
-                      <div className="w-full h-full rounded-xl overflow-hidden group">
-                        <div className="absolute top-2 right-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <button
-                            onClick={() =>
-                              openImageModal(generatedResults[2].generatedImage)
-                            }
-                            className="bg-white rounded-full p-2 shadow-md hover:bg-gray-100 transition-colors"
-                            aria-label="Zoom image"
-                          >
-                            <FiZoomIn className="w-5 h-5 text-gray-700" />
-                          </button>
-                        </div>
-                        <RobustImage
-                          src={generatedResults[2].generatedImage}
-                          alt="Oldest design"
-                        />
+                  return (
+                    <div
+                      key={displayResult.timestamp}
+                      className="relative bg-white rounded-xl overflow-hidden shadow-sm w-full h-full group"
+                    >
+                      <div className="absolute top-2 right-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button
+                          onClick={() => openImageModal(displayResult)}
+                          className="bg-white rounded-full p-2 shadow-md hover:bg-gray-100 transition-colors"
+                          aria-label="Zoom image"
+                        >
+                          <FiZoomIn className="w-5 h-5 text-gray-700" />
+                        </button>
                       </div>
-                    ) : generatedResults[3] ? (
-                      <div className="w-full h-full rounded-xl overflow-hidden group">
-                        <div className="absolute top-2 right-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <button
-                            onClick={() =>
-                              openImageModal(generatedResults[3].generatedImage)
-                            }
-                            className="bg-white rounded-full p-2 shadow-md hover:bg-gray-100 transition-colors"
-                            aria-label="Zoom image"
-                          >
-                            <FiZoomIn className="w-5 h-5 text-gray-700" />
-                          </button>
-                        </div>
-                        <RobustImage
-                          src={generatedResults[3].generatedImage}
-                          alt="Oldest design"
-                        />
+                      <div className="absolute top-2 left-2 z-10 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button
+                          onClick={() =>
+                            handleDownloadImage(
+                              displayResult.generatedImage,
+                              selectedFile?.name ||
+                                `room-${displayResult.timestamp}.jpg`
+                            )
+                          }
+                          className="bg-white rounded-full p-2 shadow-md hover:bg-gray-100 transition-colors"
+                          aria-label="Download image"
+                        >
+                          <FiDownload className="w-4 h-4 text-gray-700" />
+                        </button>
+                        <button
+                          onClick={() => openSliderModal(displayResult)}
+                          className="bg-white rounded-full p-2 shadow-md hover:bg-gray-100 transition-colors"
+                          aria-label="Compare images"
+                        >
+                          <FiColumns className="w-4 h-4 text-gray-700" />
+                        </button>
+                        <button
+                          onClick={() =>
+                            handleDeleteImage(displayResult.timestamp)
+                          }
+                          className="bg-white rounded-full p-2 shadow-md hover:bg-red-100 transition-colors"
+                          aria-label="Delete image"
+                        >
+                          <FiTrash2 className="w-4 h-4 text-red-500" />
+                        </button>
                       </div>
-                    ) : null}
-                  </div>
-                )}
+                      <RobustImage
+                        src={displayResult.generatedImage}
+                        alt={imageAlt}
+                      />
+                    </div>
+                  );
+                })}
               </div>
             </div>
           ) : (
@@ -831,34 +873,98 @@ function CreateNew() {
       </div>
 
       {/* Image Modal */}
-      {modalImage && (
+      {modalImageResult && (
         <div
           className="fixed inset-0 z-50 bg-black bg-opacity-80 flex items-center justify-center p-4 transition-opacity"
           onClick={closeImageModal}
         >
           <div
-            className="relative max-w-[95vw] max-h-[95vh] rounded-xl overflow-hidden"
+            className="relative max-w-[95vw] max-h-[95vh] rounded-xl overflow-hidden bg-white flex flex-col"
             onClick={(e) => e.stopPropagation()}
           >
+            {/* Modal Action Buttons - Top Left */}
+            <div className="absolute top-3 left-3 z-20 flex gap-2">
+              <button
+                onClick={() =>
+                  handleDownloadImage(
+                    modalImageResult.generatedImage,
+                    selectedFile?.name ||
+                      `room-${modalImageResult.timestamp}.jpg`
+                  )
+                }
+                className="bg-white rounded-full p-2 shadow-md hover:bg-gray-100 transition-colors"
+                aria-label="Download image"
+              >
+                <FiDownload className="w-5 h-5 text-gray-700" />
+              </button>
+              <button
+                onClick={() => {
+                  openSliderModal(modalImageResult);
+                  // closeImageModal(); // Optionally close zoom modal when opening slider
+                }}
+                className="bg-white rounded-full p-2 shadow-md hover:bg-gray-100 transition-colors"
+                aria-label="Compare images"
+              >
+                <FiColumns className="w-5 h-5 text-gray-700" />
+              </button>
+              <button
+                onClick={() => {
+                  handleDeleteImage(modalImageResult.timestamp);
+                  closeImageModal(); // Close modal after deleting
+                }}
+                className="bg-white rounded-full p-2 shadow-md hover:bg-red-100 transition-colors"
+                aria-label="Delete image"
+              >
+                <FiTrash2 className="w-5 h-5 text-red-500" />
+              </button>
+            </div>
+
+            {/* Close Button - Top Right */}
             <button
               onClick={closeImageModal}
-              className="absolute top-3 right-3 bg-white rounded-full p-2 shadow-md hover:bg-gray-100 transition-colors z-10"
+              className="absolute top-3 right-3 bg-white rounded-full p-2 shadow-md hover:bg-gray-100 transition-colors z-20"
               aria-label="Close"
             >
               <FiX className="w-5 h-5 text-gray-700" />
             </button>
-            <div className="w-full h-full bg-white">
+
+            {/* Image container filling the modal */}
+            <div className="w-full h-full flex-grow flex items-center justify-center overflow-hidden">
               <Image
-                src={modalImage}
-                alt="Full size render"
-                width={1200}
-                height={800}
-                className="object-contain w-full h-full"
+                src={modalImageResult.generatedImage}
+                alt={`Full size render ${modalImageResult.timestamp}`}
+                width={1200} // Set a base width, will be constrained by modal size
+                height={800} // Set a base height, will be constrained by modal size
+                className="object-contain max-w-full max-h-full block"
                 priority
               />
             </div>
           </div>
         </div>
+      )}
+
+      {/* Before-After Slider Modal */}
+      {activeSlider && (
+        <Dialog
+          open={!!activeSlider}
+          onOpenChange={(isOpen) => {
+            if (!isOpen) closeSliderModal();
+          }}
+        >
+          <DialogContent className="max-w-[90vw] md:max-w-[80vw] lg:max-w-[70vw] w-full h-[70vh] md:h-[80vh] p-0 flex flex-col">
+            <DialogTitle className="sr-only">Image Comparison</DialogTitle>
+            <div className="flex-grow relative">
+              <BeforeAfterSliderComponent
+                beforeImage={activeSlider.rawImage}
+                afterImage={activeSlider.generatedImage}
+                // onFavoriteChange={() => {}} // If you implement favorites in the slider
+              />
+            </div>
+            <Button onClick={closeSliderModal} className="m-4 mt-0">
+              Close
+            </Button>
+          </DialogContent>
+        </Dialog>
       )}
     </div>
   );
