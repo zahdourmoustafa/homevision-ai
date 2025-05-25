@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import axios from "axios"; // Use Axios for fetching the image
 import { supabase } from "@/lib/supabase"; // Import your Supabase client
+// import sharp from "sharp"; // Remove sharp as preprocessImage will be removed
 
 // Define the Luma API response type
 type LumaResponse = {
@@ -11,7 +12,7 @@ type LumaResponse = {
   created_at: string;
   assets: {
     video: string | null;
-    image: string | null;
+    image: string | null; // This is what we expect for the generated image URL
   };
   model: string;
   request: {
@@ -20,10 +21,11 @@ type LumaResponse = {
     prompt: string;
     aspect_ratio: string;
     callback_url: string | null;
-    image_ref: string | { url: string; weight?: number } | null;
-    style_ref: string | { url: string; weight?: number } | null;
-    character_ref: string | { url: string; weight?: number } | null;
-    modify_image_ref: string | { url: string; weight?: number } | null;
+    // Using more specific types for ref objects based on Luma docs
+    image_ref: { url: string; weight?: number }[] | null;
+    style_ref: { url: string; weight?: number }[] | null;
+    character_ref: { [key: string]: { images: string[] } } | null;
+    modify_image_ref: { url: string; weight?: number } | null;
   };
 };
 
@@ -37,6 +39,7 @@ interface RedesignRequestBody {
 }
 
 // Separate function to convert an image URL to Base64
+// This function is still needed for the *output* from Luma before uploading to Supabase
 const convertImageUrlToBase64 = async (imageUrl: string): Promise<string> => {
   try {
     // Add timeout and retry logic for reliability
@@ -72,7 +75,7 @@ const convertImageUrlToBase64 = async (imageUrl: string): Promise<string> => {
 const uploadBase64ImageToSupabase = async (
   base64Image: string,
   fileName: string
-): Promise<string> => {
+) => {
   try {
     // Remove the data URL prefix and get content type
     const [header, base64Data] = base64Image.split("base64,");
@@ -101,7 +104,7 @@ const uploadBase64ImageToSupabase = async (
       : `${fileName}${extension}`;
 
     // Upload the buffer to Supabase Storage
-    const { error } = await supabase.storage
+    const { data, error } = await supabase.storage
       .from("interior-images")
       .upload(`generated/${finalFileName}`, buffer, {
         contentType,
@@ -132,44 +135,48 @@ const uploadBase64ImageToSupabase = async (
 
 // Function to call Luma AI API and wait for completion
 const generateImageWithLuma = async (
-  imageUrl: string,
+  imageUrl: string, // This should be a publicly accessible URL
   prompt: string
 ): Promise<string> => {
   try {
-    // First, we need to upload the input image to get a URL Luma can access
-    // For this implementation, we'll assume the imageUrl is already accessible to Luma
-
+    console.log(
+      "Initiating Luma AI generation with input image URL:",
+      imageUrl
+    );
     // Call Luma API to initiate the generation
-    const response = await axios.post<{ id: string }>(
+    const response = await axios.post<{ id: string }>( // Luma returns an object with an ID for the generation task
       "https://api.lumalabs.ai/dream-machine/v1/generations/image",
       {
         prompt: prompt,
-        aspect_ratio: "16:9", // You can make this configurable
-        model: "photon-1", // Default model
+        aspect_ratio: "16:9", // Or make configurable
+        model: "photon-1", // Default or make configurable
+        // Using modify_image_ref as per the new code structure
         modify_image_ref: {
-          url: imageUrl,
-          weight: 0.8, // Control how much to preserve from original
+          url: imageUrl, // Luma will fetch this URL
+          weight: 0.75, // Adjust as needed, 0.7 to 0.85 is often good for preserving structure
         },
       },
       {
         headers: {
           Authorization: `Bearer ${process.env.LUMA_API_KEY}`,
           "Content-Type": "application/json",
+          Accept: "application/json",
         },
       }
     );
 
     const generationId = response.data.id;
-    console.log(`Generation initiated with ID: ${generationId}`);
+    console.log(`Luma AI Generation initiated with ID: ${generationId}`);
 
     // Poll for completion
     let attempts = 0;
-    const maxAttempts = 60; // 5 minutes max with 5-second intervals
+    const maxAttempts = 60; // Max 5 minutes (60 attempts * 5 seconds)
+    const pollInterval = 5000; // 5 seconds
 
     while (attempts < maxAttempts) {
-      await new Promise((resolve) => setTimeout(resolve, 5000)); // Wait 5 seconds between polls
+      await new Promise((resolve) => setTimeout(resolve, pollInterval));
 
-      const statusResponse = await axios.get(
+      const statusResponse = await axios.get<LumaResponse>(
         `https://api.lumalabs.ai/dream-machine/v1/generations/${generationId}`,
         {
           headers: {
@@ -179,34 +186,55 @@ const generateImageWithLuma = async (
         }
       );
 
-      const generation = statusResponse.data as LumaResponse;
+      const generation = statusResponse.data;
 
-      if (generation.state === "completed" && generation.assets.image) {
-        console.log("Generation completed successfully");
-        return generation.assets.image;
+      if (generation.state === "completed") {
+        if (generation.assets && generation.assets.image) {
+          console.log("Luma AI Generation completed successfully.");
+          return generation.assets.image;
+        } else {
+          throw new Error(
+            "Luma AI Generation completed but no image URL found in assets."
+          );
+        }
       } else if (generation.state === "failed") {
+        console.error("Luma AI Generation failed. Full response:", generation);
         throw new Error(
-          `Generation failed: ${generation.failure_reason || "Unknown reason"}`
+          `Luma AI Generation failed: ${
+            generation.failure_reason || "Unknown reason"
+          }`
         );
       }
 
       attempts++;
       console.log(
-        `Waiting for generation to complete... (${attempts}/${maxAttempts})`
+        `Luma AI - Waiting for generation... (Attempt ${attempts}/${maxAttempts}, State: ${generation.state})`
       );
     }
 
-    throw new Error("Generation timed out");
+    throw new Error(
+      "Luma AI Generation timed out after " +
+        (maxAttempts * pollInterval) / 1000 +
+        " seconds."
+    );
   } catch (error) {
-    console.error("Error generating image with Luma:", error);
-    throw error;
+    console.error("Error in generateImageWithLuma:", error);
+    if (axios.isAxiosError(error) && error.response) {
+      console.error("Luma API Error Response Data:", error.response.data);
+      throw new Error(
+        `Luma API request failed with status ${
+          error.response.status
+        }: ${JSON.stringify(error.response.data)}`
+      );
+    }
+    throw error; // Re-throw other errors
   }
 };
 
 export async function POST(req: Request) {
   try {
     const {
-      imageUrl,
+      imageUrl, // This MUST be a publicly accessible URL
       roomType,
       design,
       additionalRequirement,
@@ -242,14 +270,15 @@ export async function POST(req: Request) {
       );
     }
 
-    // Preprocess the image to make it suitable for the AI
-    console.log("Preprocessing image...");
+    // DO NOT preprocess the input imageUrl. Luma needs to fetch it directly.
+    // console.log("Preprocessing image...");
+    // const processedImageBase64 = await preprocessImage(imageUrl); // REMOVED
 
-    // Prepare the prompt for Luma AI
+    // Prepare the prompt for Luma AI (this prompt structure is from the user)
     const prompt = `Transform this ${roomType} into a stunning, photorealistic interior in ${design} style. Render the space in ultra-high detail (4K), preserving its architectural layout and key furniture positions.
 
     🛑 **STRICT CONSTRAINTS**:
-    - Do NOT change the room's geometry — maintain all walls, angles, alcoves, and proportions exactly as in the original.
+    - Do NOT change the room\'s geometry — maintain all walls, angles, alcoves, and proportions exactly as in the original.
     - Do NOT add or remove windows or doors. Use curtains or blinds ONLY on existing windows.
     - DO NOT move or rotate major furniture: beds, sofas, wardrobes, desks, kitchen counters, etc. Keep them in their original positions and orientations.
     - You MAY restyle these furniture pieces to match the new design.
@@ -278,65 +307,68 @@ export async function POST(req: Request) {
         : ""
     }
     
-    The final output should reflect expert interior design, preserving the room's spatial logic while expressing the chosen style with precision and elegance.`;
+    The final output should reflect expert interior design, preserving the room\'s spatial logic while expressing the chosen style with precision and elegance.`;
 
-    console.log("Calling Luma AI API with prompt:", prompt);
+    console.log("Constructed prompt for Luma AI:", prompt);
 
     // Generate the image using Luma AI
-    console.log("Generating image with Luma AI...");
-    const generatedImageUrl = await generateImageWithLuma(imageUrl, prompt);
-    console.log("Generated image URL from Luma:", generatedImageUrl);
-
-    // Convert the generated image URL to Base64
-    const base64GeneratedImage = await convertImageUrlToBase64(
-      generatedImageUrl
+    console.log("Generating image with Luma AI using input URL:", imageUrl);
+    const generatedImageUrlFromLuma = await generateImageWithLuma(
+      imageUrl,
+      prompt
     );
+    console.log("Generated image URL from Luma:", generatedImageUrlFromLuma);
+
+    // Convert the Luma-generated image URL to Base64 for Supabase upload
+    const base64GeneratedImage = await convertImageUrlToBase64(
+      generatedImageUrlFromLuma
+    );
+    console.log("Converted Luma image to Base64 for Supabase upload.");
 
     // Upload the Base64 image to Supabase
-    const uniqueFileName = `generated_room_${Date.now()}`;
+    const uniqueFileName = `generated_room_${Date.now()}`; // More descriptive
     const supabaseUrl = await uploadBase64ImageToSupabase(
       base64GeneratedImage,
       uniqueFileName
     );
-    console.log("Uploaded to Supabase, URL:", supabaseUrl);
+    console.log("Uploaded Luma-generated image to Supabase, URL:", supabaseUrl);
 
-    // Save the room data to the database
-    const { error: dbError } = await supabase.from("rooms").insert({
-      user_email: userEmail,
-      original_image_url: imageUrl,
-      redesigned_image_url: supabaseUrl, // Use the Supabase URL
-      room_type: roomType,
-      design_style: design,
-      additional_requirements: additionalRequirement,
-      created_at: new Date().toISOString(),
-    });
+    // Save the room data to the database using EXISTING column names
+    const { error: dbError } = await supabase.from("rooms").insert([
+      {
+        image_url: imageUrl, // Original image URL
+        transformed_image_url: supabaseUrl, // Luma-generated image URL from Supabase
+        room_type: roomType,
+        design_type: design, // Using 'design_type' as per existing schema
+        additional_requirements: additionalRequirement,
+        user_email: userEmail,
+        // created_at: new Date().toISOString(), // Optional: if you have this column
+      },
+    ]);
 
     if (dbError) {
-      console.error("Database insert error:", dbError);
+      console.error("Supabase database insert error:", dbError);
       return NextResponse.json(
         { error: "Failed to save room data", details: dbError.message },
         { status: 500 }
       );
     }
+    console.log("Room data saved to Supabase successfully.");
 
+    // Return success response with both URLs (using new response structure)
     return NextResponse.json({
       message: "Room redesigned and saved successfully",
       originalImageUrl: imageUrl,
-      generatedImageUrl: supabaseUrl, // Return the Supabase URL
+      generatedImageUrl: supabaseUrl,
     });
   } catch (error) {
-    console.error("Full error object:", error);
-    let errorMessage = "An unexpected error occurred.";
-    let statusCode = 500;
-
-    if (axios.isAxiosError(error)) {
-      errorMessage = error.response?.data?.message || error.message;
-      statusCode = error.response?.status || 500;
-    } else if (error instanceof Error) {
-      errorMessage = error.message;
-    }
-
-    console.error("Error processing request:", errorMessage);
-    return NextResponse.json({ error: errorMessage }, { status: statusCode });
+    console.error("Error in /api/redesign-room:", error);
+    return NextResponse.json(
+      {
+        error:
+          error instanceof Error ? error.message : "An unknown error occurred",
+      },
+      { status: 500 }
+    );
   }
 }

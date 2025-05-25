@@ -1,54 +1,26 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-// import { supabase } from "@/lib/supabase"; // Removed
-// import { MdPhotoLibrary } from "react-icons/md"; // Removed
+import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
+import axios from "axios";
+import { supabase } from "@/lib/supabase";
+import { TextLoader } from "./_components/CustomLoading";
+import { MdPhotoLibrary } from "react-icons/md";
+import { useUser } from "@clerk/nextjs";
 import Image from "next/image";
-import { Button } from "@/components/ui/button"; // Button is used
-// Removed FiMaximize2, FiTrash2, FiDownload from this import, kept FiX
-import { FiX } from "react-icons/fi";
-import BeforeAfterSlider from "@/app/components/BeforeAfterSlider";
-// import TextLoader from "@/components/TextLoader"; // TextLoader is unused
-// import { toast } from "sonner"; // toast is unused
-
-// import {
-//   Tabs,
-//   TabsContent,
-//   TabsList, // TabsList is unused
-//   TabsTrigger, // TabsTrigger is unused
-// } from "@/components/ui/tabs";
-// import { Slider } from "@/components/ui/slider"; // Slider is unused
-// import { Textarea } from "@/components/ui/textarea";
-// import {
-//   Select, // Select is unused
-//   SelectContent, // SelectContent is unused
-//   SelectItem, // SelectItem is unused
-//   SelectTrigger, // SelectTrigger is unused
-//   SelectValue, // SelectValue is unused
-// } from "@/components/ui/select";
-// import {
-//   Tooltip,
-//   TooltipContent,
-//   TooltipProvider,
-//   TooltipTrigger,
-// } from "@/components/ui/tooltip";
-// import { FiZoomIn } from "react-icons/fi"; // FiZoomIn is unused
-// import { Info, Grid, Rows, ChevronLeft, ChevronRight } from "lucide-react";
-// import { RiSparklingLine } from "react-icons/ri";
-// import { FiSliders } from "react-icons/fi"; // FiSliders is unused
-// import ImageSelection from "./_components/ImageSelection";
-// import BeforeAfterSliderComponent from "./_components/BeforeAfterSlider";
-// import { Skeleton } from "@/components/ui/skeleton";
-// import {
-//   Zap, // Zap is unused
-//   Sun, // Sun is unused
-//   Palmtree, // Palmtree is unused
-//   Waves, // Waves is unused
-//   Clock, // Clock is unused
-//   Factory, // Factory is unused
-//   Building, // Building is unused
-//   Feather, // Feather is unused
-// } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Slider } from "@/components/ui/slider";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+import { FiUpload, FiCheck, FiZoomIn, FiX } from "react-icons/fi";
+import { roomTypes } from "@/lib/utils";
 
 // Interface for the generated result
 interface GeneratedResult {
@@ -57,221 +29,848 @@ interface GeneratedResult {
   timestamp: number;
 }
 
+// Add custom hook for image loading with retries
+const useImageWithRetry = (src: string, maxRetries = 3) => {
+  const [imageSrc, setImageSrc] = useState<string>(src);
+  const [status, setStatus] = useState<"loading" | "success" | "error">(
+    "loading"
+  );
+  const [retries, setRetries] = useState(0);
+
+  useEffect(() => {
+    if (!src) {
+      setStatus("error");
+      return;
+    }
+
+    // Reset status when source changes
+    setStatus("loading");
+    setRetries(0);
+    setImageSrc(src);
+  }, [src]);
+
+  const handleImageError = () => {
+    if (retries < maxRetries) {
+      console.log(`Retrying image load (${retries + 1}/${maxRetries}): ${src}`);
+      // Add cache-busting parameter
+      const newSrc = `${src}?retry=${Date.now()}`;
+      setImageSrc(newSrc);
+      setRetries((prev) => prev + 1);
+    } else {
+      console.error(`Failed to load image after ${maxRetries} retries:`, src);
+      setStatus("error");
+    }
+  };
+
+  const handleImageLoad = () => {
+    setStatus("success");
+  };
+
+  return { imageSrc, status, handleImageError, handleImageLoad };
+};
+
+// Create a robust image component with error handling
+const RobustImage = ({
+  src,
+  alt,
+  className = "",
+}: {
+  src: string;
+  alt: string;
+  className?: string;
+}) => {
+  const { imageSrc, status, handleImageError, handleImageLoad } =
+    useImageWithRetry(src);
+
+  if (status === "error") {
+    return (
+      <div className="w-full h-full flex flex-col items-center justify-center bg-gray-100 p-4">
+        <MdPhotoLibrary className="w-10 h-10 text-gray-400 mb-2" />
+        <p className="text-sm text-gray-500 text-center">
+          Image could not be loaded
+        </p>
+        <button
+          className="mt-2 px-3 py-1 text-xs bg-gray-200 hover:bg-gray-300 rounded-md transition-colors"
+          onClick={() => window.location.reload()}
+        >
+          Refresh
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="relative w-full h-full">
+      <Image
+        src={imageSrc}
+        alt={alt}
+        fill
+        className={`object-cover ${className}`}
+        sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+        priority
+        onLoad={handleImageLoad}
+        onError={handleImageError}
+      />
+      {status === "loading" && (
+        <div className="absolute inset-0 flex items-center justify-center bg-gray-100 bg-opacity-50">
+          <div className="w-8 h-8 border-2 border-gray-300 border-t-gray-600 rounded-full animate-spin"></div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 function CreateNew() {
   // State management
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [preview, setPreview] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
   const [generatedResults, setGeneratedResults] = useState<GeneratedResult[]>(
     []
   );
-  const [modalImage, setModalImage] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<"after" | "before" | "side-by-side">(
-    "after"
-  );
-  const [currentResultIndex, setCurrentResultIndex] = useState<number | null>(
+  const [activeSlider, setActiveSlider] = useState<GeneratedResult | null>(
     null
   );
+  const [roomType, setRoomType] = useState<string>("");
+  const [selectedDesignTypes, setSelectedDesignTypes] = useState<string[]>([]);
+  const [designType, setDesignType] = useState<string>("");
+  const [additionalReq, setAdditionalReq] = useState<string>("");
+  const [aiCreativity, setAiCreativity] = useState<number>(50); // Default to middle value
+  const { user } = useUser();
+  // Add new state for the image modal
+  const [modalImage, setModalImage] = useState<string | null>(null);
 
-  // Key for localStorage
-  const localStorageKey = "generatedInteriorResults";
+  // Design styles data with images
+  const designStyles = [
+    { value: "Modern", label: "Modern", image: "/images/styles/modern.jpg" },
+    { value: "Summer", label: "Summer", image: "/images/styles/summer.jpg" },
+    {
+      value: "Professional",
+      label: "Professional",
+      image: "/images/styles/professional.jpg",
+    },
+    {
+      value: "Tropical",
+      label: "Tropical",
+      image: "/images/styles/tropical.jpg",
+    },
+    { value: "Coastal", label: "Coastal", image: "/images/styles/coastal.jpg" },
+    { value: "Vintage", label: "Vintage", image: "/images/styles/vintage.jpg" },
+    {
+      value: "Industrial",
+      label: "Industrial",
+      image: "/images/styles/industrial.jpg",
+    },
+    {
+      value: "Neoclassic",
+      label: "Neoclassic",
+      image: "/images/styles/neoclassic.jpg",
+    },
+    { value: "Tribal", label: "Tribal", image: "/images/styles/tribal.jpg" },
+  ];
 
-  // Load results from localStorage on component mount
-  useEffect(() => {
-    const savedResults = localStorage.getItem(localStorageKey);
-    if (savedResults) {
-      try {
-        const parsedResults = JSON.parse(savedResults);
-        // Basic validation to ensure it's an array
-        if (Array.isArray(parsedResults)) {
-          setGeneratedResults(parsedResults);
-        } else {
-          console.warn("Invalid data found in localStorage, clearing.");
-          localStorage.removeItem(localStorageKey);
-        }
-      } catch (error) {
-        console.error("Error parsing results from localStorage:", error);
-        localStorage.removeItem(localStorageKey); // Clear invalid data
+  // Toggle design style selection
+  const toggleDesignStyle = (style: string) => {
+    setSelectedDesignTypes((prev) => {
+      // If already selected, remove it
+      if (prev.includes(style)) {
+        return prev.filter((s) => s !== style);
       }
-    }
-  }, []); // Empty dependency array ensures this runs only once on mount
+      // If not selected and we have less than 4 selected, add it
+      if (prev.length < 4) {
+        return [...prev, style];
+      }
+      // If we already have 4 selected, show a toast and don't add
+      toast.info("You can select up to 4 design styles");
+      return prev;
+    });
+  };
 
-  // Save results to localStorage whenever they change
+  // Transform selected design types to a single string for the API
   useEffect(() => {
-    // Only save if there are results to prevent saving an empty array initially
-    if (generatedResults.length > 0) {
-      localStorage.setItem(localStorageKey, JSON.stringify(generatedResults));
+    // Update the design type for backward compatibility with the API
+    if (selectedDesignTypes.length > 0) {
+      setDesignType(selectedDesignTypes.join(", "));
+    } else {
+      setDesignType("");
     }
-    // Optionally, clear localStorage if the results become empty (e.g., user deletes all)
-    // else {
-    //   localStorage.removeItem(localStorageKey);
-    // }
-  }, [generatedResults]); // Dependency array ensures this runs when generatedResults changes
+  }, [selectedDesignTypes]);
+
+  // Loading messages for the animation
+  const loadingMessages = [
+    "Analyzing your room...",
+    "Applying design style...",
+    "Generating new interior...",
+    "Adding finishing touches...",
+    "Almost there...",
+  ];
+
+  // Handle file selection
+  const handleFileSelected = (file: File) => {
+    setSelectedFile(file);
+
+    // Create preview
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setPreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  // Handle file upload via input
+  const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      // Validate file size before processing
+      if (file.size > 10 * 1024 * 1024) {
+        // 10MB limit
+        toast.error("File size should be less than 10MB");
+        return;
+      }
+      handleFileSelected(file);
+    }
+  };
+
+  // Handle file drag and drop
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    const file = e.dataTransfer.files?.[0];
+    if (file) {
+      // Validate file size before processing
+      if (file.size > 10 * 1024 * 1024) {
+        // 10MB limit
+        toast.error("File size should be less than 10MB");
+        return;
+      }
+      handleFileSelected(file);
+    }
+  };
+
+  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+  };
+
+  // Save raw image to Supabase
+  const saveRawImageToSupabase = async (file: File) => {
+    try {
+      const fileName = `${Date.now()}-${file.name}`;
+      const { data, error } = await supabase.storage
+        .from("interior-images")
+        .upload(fileName, file);
+
+      if (error) {
+        throw error;
+      }
+
+      const { data: publicUrlData } = supabase.storage
+        .from("interior-images")
+        .getPublicUrl(data.path);
+
+      return publicUrlData.publicUrl;
+    } catch (error) {
+      console.error("Error uploading image to Supabase:", error);
+      throw error;
+    }
+  };
+
+  // Generate AI image
+  const generateAiImage = async () => {
+    // Log the values to debug
+    console.log("Room Type:", roomType);
+    console.log("Design Types:", selectedDesignTypes);
+    console.log("Design Type String:", designType);
+    console.log("Additional Requirements:", additionalReq);
+    console.log("AI Creativity Level:", aiCreativity);
+
+    if (!selectedFile) {
+      toast.error("Please upload an image first.");
+      return;
+    }
+
+    if (!user?.emailAddresses?.[0]?.emailAddress) {
+      toast.error("User email not found. Please ensure you are logged in.");
+      return;
+    }
+
+    if (!roomType || selectedDesignTypes.length === 0) {
+      toast.error(
+        "Please select both room type and at least one design style."
+      );
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+      const rawImageUrl = await saveRawImageToSupabase(selectedFile);
+
+      // Prepare the request payload
+      const payload = {
+        imageUrl: rawImageUrl,
+        userEmail: user.emailAddresses[0].emailAddress,
+        roomType,
+        design: designType,
+        designStyles: selectedDesignTypes,
+        additionalRequirement: additionalReq,
+        creativityLevel: aiCreativity,
+      };
+
+      console.log("Sending request to API with payload:", payload);
+
+      // Try the API call with retries
+      let result;
+      let retryCount = 0;
+      const maxRetries = 2;
+
+      while (retryCount <= maxRetries) {
+        try {
+          // Add a cache-busting parameter to prevent caching issues
+          const timestamp = Date.now();
+          result = await axios.post(
+            `/api/redesign-room?t=${timestamp}`,
+            payload
+          );
+          console.log("API Response:", result.data); // This log shows the new structure
+          break; // Success, exit the retry loop
+        } catch (apiError) {
+          console.error(`API call attempt ${retryCount + 1} failed:`, apiError);
+
+          if (retryCount === maxRetries) {
+            throw apiError; // Rethrow if we've exhausted retries
+          }
+
+          // Wait before retrying (exponential backoff)
+          await new Promise((resolve) =>
+            setTimeout(resolve, 1000 * (retryCount + 1))
+          );
+          retryCount++;
+        }
+      }
+
+      // Updated logic to access the generatedImageUrl from the new API response structure
+      let generatedImageUrl = null;
+      if (result && result.data && result.data.generatedImageUrl) {
+        generatedImageUrl = result.data.generatedImageUrl;
+      } else {
+        // Optional: Log the actual response if the expected field is missing for debugging
+        console.error(
+          "generatedImageUrl not found in API response:",
+          result?.data
+        );
+      }
+
+      if (!generatedImageUrl) {
+        throw new Error("No valid image URL found in the API response");
+      }
+
+      const newResult = {
+        generatedImage: generatedImageUrl,
+        rawImage: rawImageUrl,
+        timestamp: Date.now(),
+      };
+
+      // Add the new image to the BEGINNING of the array instead of the end
+      setGeneratedResults((prev) => [newResult, ...prev].slice(0, 4));
+
+      toast.success("Room redesigned successfully!");
+    } catch (error) {
+      console.error("Error generating AI image:", error);
+
+      // Provide a more helpful error message to the user
+      if (axios.isAxiosError(error) && error.response) {
+        if (error.response.status === 404) {
+          toast.error(
+            "The design service is temporarily unavailable. Please try again in a few moments."
+          );
+        } else if (error.response.status === 429) {
+          toast.error(
+            "Too many requests. Please wait a moment before trying again."
+          );
+        } else {
+          toast.error(
+            `Error: ${
+              error.response.data?.error ||
+              error.message ||
+              "Something went wrong"
+            }`
+          );
+        }
+      } else {
+        toast.error("Failed to generate design. Please try again.");
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Function to open modal with specific image
+  const openImageModal = (imageUrl: string) => {
+    setModalImage(imageUrl);
+  };
 
   // Function to close modal
   const closeImageModal = () => {
     setModalImage(null);
-    setCurrentResultIndex(null);
-    setViewMode("after");
   };
 
-  // Function to download image
-  // const downloadImage = async ( // downloadImage is unused
-  //   imageUrl: string,
-  //   index: number | null // Assuming index might be used for naming or tracking
-  // ) => {
-  //   if (index === null) return;
-  //   toast.info("Starting download...");
-
-  //   try {
-  //     const fileName = `generated_image_${index + 1}.jpg`;
-  //     const proxiedUrlString = `/api/download?url=${encodeURIComponent(
-  //       imageUrl
-  //     )}&filename=${fileName}`;
-
-  //     const response = await fetch(proxiedUrlString);
-
-  //     if (!response.ok) {
-  //       // Try to get error message from response body
-  //       let errorBody = "Unknown error";
-  //       try {
-  //         const errorJson: { error?: string } = await response.json();
-  //         errorBody = errorJson.error || JSON.stringify(errorJson);
-  //       } catch /* istanbul ignore next */ {
-  //         // If response is not JSON, use status text
-  //         errorBody = response.statusText;
-  //       }
-  //       throw new Error(
-  //         `Failed to fetch download: ${response.status} ${errorBody}`
-  //       );
-  //     }
-
-  //     const blob = await response.blob();
-  //     const blobUrl = window.URL.createObjectURL(blob);
-  //     const link = document.createElement("a");
-  //     link.href = blobUrl;
-  //     link.download = fileName;
-  //     document.body.appendChild(link);
-  //     link.click();
-  //     document.body.removeChild(link);
-  //     window.URL.revokeObjectURL(blobUrl);
-  //     toast.success("Download started!");
-  //   } catch (error) { // Changed type to unknown
-  //     // Added type for error
-  //     console.error("Error downloading image:", error);
-  //     if (error instanceof Error) {
-  //       toast.error(`Failed to download image: ${error.message}`);
-  //     } else {
-  //       toast.error("Failed to download image: An unknown error occurred");
-  //     }
-  //   }
-  // };
-
-  if (!modalImage || currentResultIndex === null) return null;
-
-  const currentImage = generatedResults[currentResultIndex];
-  let beforeSrc = currentImage.rawImage;
-  let afterSrc = currentImage.generatedImage;
-
-  // Ensure that beforeSrc and afterSrc are valid strings
-  if (typeof beforeSrc !== "string") {
-    console.error("Invalid beforeSrc:", beforeSrc);
-    beforeSrc = ""; // Fallback to an empty string or some default placeholder
-  }
-  if (typeof afterSrc !== "string") {
-    console.error("Invalid afterSrc:", afterSrc);
-    afterSrc = ""; // Fallback to an empty string
-  }
-
-  // Conditional rendering for different view modes
-  let modalContent;
-  if (viewMode === "side-by-side" && beforeSrc && afterSrc) {
-    modalContent = (
-      <BeforeAfterSlider beforeImage={beforeSrc} afterImage={afterSrc} />
-    );
-  } else if (viewMode === "before" && beforeSrc) {
-    modalContent = (
-      <Image
-        src={beforeSrc}
-        alt="Original room"
-        fill
-        className="object-contain rounded-lg"
-        unoptimized
-      />
-    );
-  } else if (afterSrc) {
-    // Default to "after"
-    modalContent = (
-      <Image
-        src={afterSrc}
-        alt="Generated room"
-        fill
-        className="object-contain rounded-lg"
-        unoptimized
-      />
-    );
-  } else {
-    modalContent = <p>Image not available</p>; // Fallback if no valid image
-  }
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
-      <div className="relative w-full max-w-3xl h-[80vh] bg-themeDarkGray rounded-xl shadow-2xl flex flex-col overflow-hidden p-6">
-        {/* Header with controls */}
-        <div className="flex items-center justify-between mb-4">
-          {/* <Button
-            variant="outline"
-            size="icon"
-            onClick={() =>
-              setComparisonView(
-                viewMode === "side-by-side" ? "after" : "side-by-side"
-              )
-            }
-          >
-            <FiMaximize2 className="w-5 h-5" />
-          </Button> */}
-          {/* {viewMode === "side-by-side" && (
-            <>
-              <Button
-                variant={"outline"}
-                onClick={() => setComparisonView("before")}
+    <div className="flex flex-col h-screen bg-white">
+      {/* Main content area */}
+      <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
+        {/* Left panel - Controls - Make scrollable */}
+        <div className="w-full md:w-[400px] overflow-y-auto h-[calc(100vh-60px)] md:h-screen p-4 md:border-r">
+          <div className="space-y-4 pb-8">
+            {/* Upload Image Section */}
+            <div className="mb-6">
+              <div className="text-lg font-medium flex items-center gap-2">
+                Upload image
+                <span className="bg-orange-100 text-orange-600 text-xs rounded-full w-4 h-4 flex items-center justify-center">
+                  1
+                </span>
+              </div>
+
+              {/* Image upload area */}
+              <div
+                className="mt-2 border border-dashed rounded-lg p-4 cursor-pointer hover:bg-gray-50 transition-colors"
+                onDrop={handleDrop}
+                onDragOver={handleDragOver}
+                onClick={() => document.getElementById("file-upload")?.click()}
               >
-                Show Original
-              </Button>
-              <Button
-                variant={"outline"}
-                onClick={() => setComparisonView("after")}
-              >
-                Show Generated
-              </Button>
-            </>
-          )} */}
-        </div>
-        <div className="flex gap-2">
-          {/* <Button
-            variant="outline"
-            size="icon"
-            onClick={() =>
-              downloadImage(currentImage.generatedImage, currentResultIndex)
-            }
-          >
-            <FiDownload className="w-5 h-5" />
-          </Button> */}
-          {/* <Button
-            variant="outline"
-            size="icon"
-            onClick={() => deleteImage(currentImage.generatedImage)}
-            className="hover:bg-red-500/20 hover:text-red-500 text-red-500 border-red-500"
-          >
-            <FiTrash2 className="w-5 h-5" />
-          </Button> */}
-          <Button variant="outline" size="icon" onClick={closeImageModal}>
-            <FiX className="w-5 h-5" />
-          </Button>
+                {preview ? (
+                  <div className="relative w-full h-[200px]">
+                    {typeof preview === "string" && preview.trim() !== "" && (
+                      <Image
+                        src={preview}
+                        alt="Room preview"
+                        fill
+                        className="object-contain rounded-lg"
+                        sizes="(max-width: 768px) 100vw, 400px"
+                      />
+                    )}
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center justify-center py-8">
+                    <div className="bg-orange-100 rounded-full p-2 mb-2">
+                      <FiUpload className="w-5 h-5 text-orange-500" />
+                    </div>
+                    <p className="text-sm text-center">
+                      Click to upload or drag and drop your image here
+                    </p>
+                    <p className="text-xs text-gray-500 mt-1">or</p>
+                    <p className="text-xs text-blue-500 mt-1">
+                      Use one of our sample images
+                    </p>
+                  </div>
+                )}
+              </div>
+              <input
+                id="file-upload"
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleFileInputChange}
+              />
+            </div>
+
+            {/* Tabs Section */}
+            <Tabs defaultValue="custom" className="w-full">
+              <TabsList className="grid grid-cols-4 w-full mb-4">
+                <TabsTrigger value="custom" className="text-xs">
+                  Custom
+                </TabsTrigger>
+                <TabsTrigger value="style-fusion" className="text-xs">
+                  Style Fusion
+                </TabsTrigger>
+                <TabsTrigger value="auto-style" className="text-xs">
+                  Auto Style
+                </TabsTrigger>
+                <TabsTrigger value="enhance" className="text-xs">
+                  Enhance
+                </TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="custom" className="space-y-4">
+                {/* Room Type Selection */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Room Type</label>
+                  <Select onValueChange={setRoomType}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="-- Select Room Type --" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {roomTypes.map((room) => (
+                        <SelectItem key={room.value} value={room.value}>
+                          {room.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Design Style Selection - REPLACED WITH GRID */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">
+                    Select Room Themes (up to 4)
+                  </label>
+                  <div className="grid grid-cols-3 gap-3 mt-2">
+                    {designStyles.map((style) => (
+                      <div
+                        key={style.value}
+                        onClick={() => toggleDesignStyle(style.value)}
+                        className="cursor-pointer flex flex-col items-center"
+                      >
+                        <div className="relative w-full aspect-square rounded-lg overflow-hidden border hover:border-gray-400 transition-all">
+                          {selectedDesignTypes.includes(style.value) && (
+                            <div className="absolute top-2 right-2 bg-white rounded-full w-5 h-5 flex items-center justify-center shadow-sm z-10">
+                              <FiCheck className="w-3 h-3 text-black" />
+                            </div>
+                          )}
+                          <div
+                            className={`absolute inset-0 ${
+                              selectedDesignTypes.includes(style.value)
+                                ? "ring-2 ring-blue-500"
+                                : ""
+                            }`}
+                          >
+                            <Image
+                              src={style.image}
+                              alt={style.label}
+                              fill
+                              className="object-cover"
+                              sizes="(max-width: 768px) 100px, 120px"
+                            />
+                          </div>
+                        </div>
+                        <span className="text-xs text-center mt-1.5 text-gray-700">
+                          {style.label}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="mt-1 flex items-center justify-between">
+                    <p className="text-xs text-gray-500">
+                      {selectedDesignTypes.length === 0
+                        ? "Select at least one theme"
+                        : `${selectedDesignTypes.length} theme${
+                            selectedDesignTypes.length > 1 ? "s" : ""
+                          } selected`}
+                    </p>
+                    {selectedDesignTypes.length > 0 && (
+                      <button
+                        onClick={() => setSelectedDesignTypes([])}
+                        className="text-xs text-blue-500 hover:underline"
+                      >
+                        Clear
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Custom Design Request (Additional Requirements) */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">
+                    Custom Design Request
+                  </label>
+                  <Textarea
+                    placeholder="A modern kitchen with navy blue cabinets, marble countertops, oak vinyl plank flooring, gold accents, pendant lights..."
+                    className="resize-none min-h-[100px]"
+                    onChange={(e) => setAdditionalReq(e.target.value)}
+                  />
+                </div>
+
+                {/* AI Creativity Slider */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-sm font-medium">AI Creativity</label>
+                    <span className="bg-orange-100 text-orange-600 text-xs rounded-full w-4 h-4 flex items-center justify-center">
+                      2
+                    </span>
+                  </div>
+                  <div className="space-y-1">
+                    <Slider
+                      defaultValue={[50]}
+                      max={100}
+                      step={1}
+                      onValueChange={(value) => setAiCreativity(value[0])}
+                    />
+                    <div className="flex justify-between text-xs text-gray-500">
+                      <span>Low</span>
+                      <span>High</span>
+                    </div>
+                  </div>
+                </div>
+              </TabsContent>
+
+              {/* Other tabs content would go here */}
+              <TabsContent value="style-fusion">
+                <div className="text-sm text-gray-500 p-4 text-center">
+                  Style Fusion functionality coming soon!
+                </div>
+              </TabsContent>
+              <TabsContent value="auto-style">
+                <div className="text-sm text-gray-500 p-4 text-center">
+                  Auto Style functionality coming soon!
+                </div>
+              </TabsContent>
+              <TabsContent value="enhance">
+                <div className="text-sm text-gray-500 p-4 text-center">
+                  Enhance functionality coming soon!
+                </div>
+              </TabsContent>
+            </Tabs>
+
+            {/* Visualize Button */}
+            <Button
+              onClick={generateAiImage}
+              disabled={
+                isLoading ||
+                !selectedFile ||
+                !roomType ||
+                selectedDesignTypes.length === 0
+              }
+              className="w-full bg-black hover:bg-gray-800 text-white mt-4 h-12"
+            >
+              {isLoading ? "Visualizing..." : "Visualize"}
+            </Button>
+
+            <p className="text-xs text-gray-500 text-center mt-2">
+              Welcome to HomeVisualizer.AI! Enjoy{" "}
+              <span className="font-medium">2 complimentary renders</span> 🎁 on
+              the house. Want more? Explore our{" "}
+              <span className="text-orange-500">plans →</span>
+            </p>
+          </div>
         </div>
 
-        {/* Image display area */}
-        <div className="flex-1 relative rounded-lg overflow-hidden bg-black">
-          {modalContent}
+        {/* Right panel - Results - Keep fixed */}
+        <div className="flex-1 p-4 flex items-center justify-center bg-gray-50 h-[calc(100vh-60px)] md:h-screen">
+          {generatedResults.length > 0 || isLoading ? (
+            // Always show the grid when we have generated images or are loading
+            <div className="w-full h-full flex items-center justify-center">
+              {/* Always use a 2x2 grid layout that fills the viewport */}
+              <div className="grid grid-cols-2 grid-rows-2 gap-2 w-full h-full max-h-[95vh] max-w-[95%]">
+                {/* Top Left - Loading State or Newest Image - always visible if loading or if image exists */}
+                {(isLoading || generatedResults[0]) && (
+                  <div className="relative bg-white rounded-xl overflow-hidden shadow-sm w-full h-full">
+                    {isLoading ? (
+                      <div className="w-full h-full flex flex-col items-center justify-center p-4 bg-gray-50">
+                        <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
+                          <MdPhotoLibrary className="w-8 h-8 text-gray-400" />
+                        </div>
+                        <h3 className="text-lg font-medium text-gray-700 mb-2">
+                          Crafting Your Visualization
+                        </h3>
+                        <div className="w-full max-w-xs bg-gray-200 h-2 rounded-full mt-2 overflow-hidden">
+                          <div
+                            className="h-full bg-orange-500 rounded-full animate-pulse"
+                            style={{ width: "65%" }}
+                          ></div>
+                        </div>
+                      </div>
+                    ) : generatedResults[0] ? (
+                      <div className="w-full h-full rounded-xl overflow-hidden group">
+                        <div className="absolute top-2 right-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button
+                            onClick={() =>
+                              openImageModal(generatedResults[0].generatedImage)
+                            }
+                            className="bg-white rounded-full p-2 shadow-md hover:bg-gray-100 transition-colors"
+                            aria-label="Zoom image"
+                          >
+                            <FiZoomIn className="w-5 h-5 text-gray-700" />
+                          </button>
+                        </div>
+                        <RobustImage
+                          src={generatedResults[0].generatedImage}
+                          alt="Latest design"
+                        />
+                      </div>
+                    ) : null}
+                  </div>
+                )}
+
+                {/* Top Right - First Image when loading or Second Newest Image - only visible if has content */}
+                {((isLoading && generatedResults[0]) ||
+                  (!isLoading && generatedResults[1])) && (
+                  <div className="relative bg-white rounded-xl overflow-hidden shadow-sm w-full h-full">
+                    {isLoading && generatedResults[0] ? (
+                      <div className="w-full h-full rounded-xl overflow-hidden group">
+                        <div className="absolute top-2 right-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button
+                            onClick={() =>
+                              openImageModal(generatedResults[0].generatedImage)
+                            }
+                            className="bg-white rounded-full p-2 shadow-md hover:bg-gray-100 transition-colors"
+                            aria-label="Zoom image"
+                          >
+                            <FiZoomIn className="w-5 h-5 text-gray-700" />
+                          </button>
+                        </div>
+                        <RobustImage
+                          src={generatedResults[0].generatedImage}
+                          alt="Previous design"
+                        />
+                      </div>
+                    ) : generatedResults[1] ? (
+                      <div className="w-full h-full rounded-xl overflow-hidden group">
+                        <div className="absolute top-2 right-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button
+                            onClick={() =>
+                              openImageModal(generatedResults[1].generatedImage)
+                            }
+                            className="bg-white rounded-full p-2 shadow-md hover:bg-gray-100 transition-colors"
+                            aria-label="Zoom image"
+                          >
+                            <FiZoomIn className="w-5 h-5 text-gray-700" />
+                          </button>
+                        </div>
+                        <RobustImage
+                          src={generatedResults[1].generatedImage}
+                          alt="Previous design"
+                        />
+                      </div>
+                    ) : null}
+                  </div>
+                )}
+
+                {/* Bottom Left - Second image when loading or Third Newest Image - only visible if has content */}
+                {((isLoading && generatedResults[1]) ||
+                  (!isLoading && generatedResults[2])) && (
+                  <div className="relative bg-white rounded-xl overflow-hidden shadow-sm w-full h-full">
+                    {isLoading && generatedResults[1] ? (
+                      <div className="w-full h-full rounded-xl overflow-hidden group">
+                        <div className="absolute top-2 right-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button
+                            onClick={() =>
+                              openImageModal(generatedResults[1].generatedImage)
+                            }
+                            className="bg-white rounded-full p-2 shadow-md hover:bg-gray-100 transition-colors"
+                            aria-label="Zoom image"
+                          >
+                            <FiZoomIn className="w-5 h-5 text-gray-700" />
+                          </button>
+                        </div>
+                        <RobustImage
+                          src={generatedResults[1].generatedImage}
+                          alt="Older design"
+                        />
+                      </div>
+                    ) : generatedResults[2] ? (
+                      <div className="w-full h-full rounded-xl overflow-hidden group">
+                        <div className="absolute top-2 right-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button
+                            onClick={() =>
+                              openImageModal(generatedResults[2].generatedImage)
+                            }
+                            className="bg-white rounded-full p-2 shadow-md hover:bg-gray-100 transition-colors"
+                            aria-label="Zoom image"
+                          >
+                            <FiZoomIn className="w-5 h-5 text-gray-700" />
+                          </button>
+                        </div>
+                        <RobustImage
+                          src={generatedResults[2].generatedImage}
+                          alt="Older design"
+                        />
+                      </div>
+                    ) : null}
+                  </div>
+                )}
+
+                {/* Bottom Right - Third image when loading or Fourth Newest Image - only visible if has content */}
+                {((isLoading && generatedResults[2]) ||
+                  (!isLoading && generatedResults[3])) && (
+                  <div className="relative bg-white rounded-xl overflow-hidden shadow-sm w-full h-full">
+                    {isLoading && generatedResults[2] ? (
+                      <div className="w-full h-full rounded-xl overflow-hidden group">
+                        <div className="absolute top-2 right-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button
+                            onClick={() =>
+                              openImageModal(generatedResults[2].generatedImage)
+                            }
+                            className="bg-white rounded-full p-2 shadow-md hover:bg-gray-100 transition-colors"
+                            aria-label="Zoom image"
+                          >
+                            <FiZoomIn className="w-5 h-5 text-gray-700" />
+                          </button>
+                        </div>
+                        <RobustImage
+                          src={generatedResults[2].generatedImage}
+                          alt="Oldest design"
+                        />
+                      </div>
+                    ) : generatedResults[3] ? (
+                      <div className="w-full h-full rounded-xl overflow-hidden group">
+                        <div className="absolute top-2 right-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button
+                            onClick={() =>
+                              openImageModal(generatedResults[3].generatedImage)
+                            }
+                            className="bg-white rounded-full p-2 shadow-md hover:bg-gray-100 transition-colors"
+                            aria-label="Zoom image"
+                          >
+                            <FiZoomIn className="w-5 h-5 text-gray-700" />
+                          </button>
+                        </div>
+                        <RobustImage
+                          src={generatedResults[3].generatedImage}
+                          alt="Oldest design"
+                        />
+                      </div>
+                    ) : null}
+                  </div>
+                )}
+              </div>
+            </div>
+          ) : (
+            // Clean, minimal placeholder when no images are generated
+            <div className="w-full h-full max-h-[95vh] max-w-[95%] flex flex-col items-center justify-center text-center p-6 bg-white rounded-xl shadow-sm">
+              <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
+                <MdPhotoLibrary className="w-8 h-8 text-gray-400" />
+              </div>
+              <h2 className="text-xl font-medium text-gray-700 mb-2">
+                Generated renders will appear here
+              </h2>
+              <p className="text-gray-500 text-sm max-w-md">
+                Ready to bring your vision to life? Get started on the left to
+                create your own custom renders.
+              </p>
+            </div>
+          )}
         </div>
       </div>
+
+      {/* Image Modal */}
+      {modalImage && (
+        <div
+          className="fixed inset-0 z-50 bg-black bg-opacity-80 flex items-center justify-center p-4 transition-opacity"
+          onClick={closeImageModal}
+        >
+          <div
+            className="relative max-w-[95vw] max-h-[95vh] rounded-xl overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              onClick={closeImageModal}
+              className="absolute top-3 right-3 bg-white rounded-full p-2 shadow-md hover:bg-gray-100 transition-colors z-10"
+              aria-label="Close"
+            >
+              <FiX className="w-5 h-5 text-gray-700" />
+            </button>
+            <div className="w-full h-full bg-white">
+              <Image
+                src={modalImage}
+                alt="Full size render"
+                width={1200}
+                height={800}
+                className="object-contain w-full h-full"
+                priority
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
