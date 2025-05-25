@@ -5,7 +5,6 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import axios from "axios";
 import { supabase } from "@/lib/supabase";
-import { TextLoader } from "./_components/CustomLoading";
 import { MdPhotoLibrary } from "react-icons/md";
 import { useUser } from "@clerk/nextjs";
 import Image from "next/image";
@@ -128,9 +127,6 @@ function CreateNew() {
   const [generatedResults, setGeneratedResults] = useState<GeneratedResult[]>(
     []
   );
-  const [activeSlider, setActiveSlider] = useState<GeneratedResult | null>(
-    null
-  );
   const [roomType, setRoomType] = useState<string>("");
   const [selectedDesignTypes, setSelectedDesignTypes] = useState<string[]>([]);
   const [designType, setDesignType] = useState<string>("");
@@ -196,14 +192,7 @@ function CreateNew() {
     }
   }, [selectedDesignTypes]);
 
-  // Loading messages for the animation
-  const loadingMessages = [
-    "Analyzing your room...",
-    "Applying design style...",
-    "Generating new interior...",
-    "Adding finishing touches...",
-    "Almost there...",
-  ];
+
 
   // Handle file selection
   const handleFileSelected = (file: File) => {

@@ -104,7 +104,8 @@ const uploadBase64ImageToSupabase = async (
       : `${fileName}${extension}`;
 
     // Upload the buffer to Supabase Storage
-    const { data, error } = await supabase.storage
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { data: _data, error } = await supabase.storage
       .from("interior-images")
       .upload(`generated/${finalFileName}`, buffer, {
         contentType,
