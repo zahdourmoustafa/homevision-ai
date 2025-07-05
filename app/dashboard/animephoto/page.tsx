@@ -1,35 +1,9 @@
 "use client";
 
-import React, { useState, useCallback, lazy, Suspense } from "react";
+import { useState, useCallback, Suspense, useEffect, memo } from "react";
+import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import LoadingSpinner from "../_components/LoadingSpinner";
-
-// Lazy load heavy components
-const DropzoneComponent = lazy(() =>
-  import("react-dropzone").then((module) => ({ default: module.useDropzone }))
-);
-const Progress = lazy(() =>
-  import("@/components/ui/progress").then((module) => ({
-    default: module.Progress,
-  }))
-);
-const Alert = lazy(() =>
-  import("@/components/ui/alert").then((module) => ({
-    default: module.Alert,
-    AlertDescription: module.AlertDescription,
-    AlertTitle: module.AlertTitle,
-  }))
-);
-const Icons = lazy(() =>
-  import("lucide-react").then((module) => ({
-    default: {
-      UploadCloud: module.UploadCloud,
-      CheckCircle: module.CheckCircle,
-      XCircle: module.XCircle,
-      Loader2: module.Loader2,
-    },
-  }))
-);
 
 const AnimePhotoPage = () => {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -39,11 +13,10 @@ const AnimePhotoPage = () => {
   );
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [progress, setProgress] = useState(0);
   const [isComponentsLoaded, setIsComponentsLoaded] = useState(false);
 
   // Load heavy components after initial render
-  React.useEffect(() => {
+  useEffect(() => {
     const timer = setTimeout(() => {
       setIsComponentsLoaded(true);
     }, 100);
@@ -59,7 +32,6 @@ const AnimePhotoPage = () => {
     setPreviewUrl(URL.createObjectURL(file));
     setGeneratedVideoUrl(null);
     setError(null);
-    setProgress(0);
   }, []);
 
   const handleSubmit = async () => {
@@ -71,30 +43,15 @@ const AnimePhotoPage = () => {
     setIsLoading(true);
     setError(null);
     setGeneratedVideoUrl(null);
-    setProgress(0);
 
     const formData = new FormData();
     formData.append("image", selectedFile);
 
     try {
-      // Progress simulation
-      let currentProgress = 0;
-      const progressInterval = setInterval(() => {
-        currentProgress += 10;
-        if (currentProgress <= 100) {
-          setProgress(currentProgress);
-        } else {
-          clearInterval(progressInterval);
-        }
-      }, 200);
-
       const response = await fetch("/api/animephoto", {
         method: "POST",
         body: formData,
       });
-
-      clearInterval(progressInterval);
-      setProgress(100);
 
       if (!response.ok) {
         const errorData = await response.json();
@@ -110,7 +67,6 @@ const AnimePhotoPage = () => {
       console.error("Error generating video:", err);
     } finally {
       setIsLoading(false);
-      setProgress(0);
     }
   };
 
@@ -144,9 +100,11 @@ const AnimePhotoPage = () => {
             <label htmlFor="file-input" className="cursor-pointer">
               {previewUrl ? (
                 <div className="relative group">
-                  <img
+                  <Image
                     src={previewUrl}
                     alt="Selected preview"
+                    width={500}
+                    height={500}
                     className="max-h-80 rounded-md object-contain mx-auto"
                   />
                   <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity rounded-md">
@@ -212,4 +170,4 @@ const AnimePhotoPage = () => {
   );
 };
 
-export default React.memo(AnimePhotoPage);
+export default memo(AnimePhotoPage);

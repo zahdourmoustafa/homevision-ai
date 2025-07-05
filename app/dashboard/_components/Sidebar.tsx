@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import { memo, ElementType } from "react";
 import {
   Home,
   Image as ImageIcon,
@@ -12,21 +12,17 @@ import {
   Crown,
 } from "lucide-react";
 import Link from "next/link";
-import { Button } from "@/components/ui/button";
+import { Button, ButtonProps } from "@/components/ui/button";
+import { useAuth } from "@clerk/nextjs";
+
+type NavItemProps = {
+  href: string;
+  icon: ElementType;
+} & ButtonProps;
 
 // Memoized navigation item component
-const NavItem = React.memo(
-  ({
-    href,
-    icon: Icon,
-    children,
-    ...props
-  }: {
-    href: string;
-    icon: React.ElementType;
-    children: React.ReactNode;
-    [key: string]: any;
-  }) => (
+const NavItem = memo(
+  ({ href, icon: Icon, children, ...props }: NavItemProps) => (
     <Link href={href} prefetch={true}>
       <Button
         variant="ghost"
@@ -39,8 +35,22 @@ const NavItem = React.memo(
     </Link>
   )
 );
+NavItem.displayName = "NavItem";
 
-export const Sidebar = React.memo(() => {
+export const Sidebar = memo(() => {
+  const { signOut } = useAuth();
+
+  const handleLogout = async () => {
+    console.log("Logout button clicked");
+    try {
+      console.log("Starting signOut process");
+      await signOut({ redirectUrl: "/" });
+      console.log("SignOut completed");
+    } catch (error) {
+      console.error("Error during signOut:", error);
+    }
+  };
+
   return (
     <div className="h-full flex flex-col gap-y-6 p-4 bg-blue-950 text-indigo-100 overflow-y-auto">
       <div className="flex items-center justify-center py-4">
@@ -84,6 +94,7 @@ export const Sidebar = React.memo(() => {
         <Button
           variant="ghost"
           className="w-full justify-start gap-x-3 text-indigo-100 hover:bg-indigo-800 hover:text-white rounded-lg px-3 py-2"
+          onClick={handleLogout}
         >
           <LogOut className="h-5 w-5" />
           Log Out

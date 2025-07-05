@@ -105,7 +105,7 @@ export const useImageGeneration = () => {
             } else {
               throw new Error("Invalid response format from API");
             }
-          } catch (error: any) {
+          } catch (error: unknown) {
             retryCount++;
             if (retryCount > maxRetries) {
               throw error;
@@ -115,12 +115,15 @@ export const useImageGeneration = () => {
             );
           }
         }
-      } catch (error: any) {
+      } catch (error: unknown) {
         console.error("Error generating image:", error);
-        toast.error(
-          error.response?.data?.error ||
-            "Failed to generate image. Please try again."
-        );
+        let message = "Failed to generate image. Please try again.";
+        if (axios.isAxiosError(error)) {
+          message = error.response?.data?.error || message;
+        } else if (error instanceof Error) {
+          message = error.message;
+        }
+        toast.error(message);
       } finally {
         setIsLoading(false);
       }

@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useEffect, Suspense } from "react";
+import { useState, useEffect, Suspense } from "react";
+import Image from "next/image";
 import { toast } from "sonner";
 import LoadingSpinner from "../_components/LoadingSpinner";
 
@@ -13,8 +14,6 @@ import {
 import { useImageModal } from "../create-new/_components/hooks/useImageModal";
 
 // Import components from create-new (they're reusable)
-import ImageUploadArea from "../create-new/_components/ImageUploadArea";
-import ControlPanel from "../create-new/_components/ControlPanel";
 import ImageModal from "../create-new/_components/ImageModal";
 import ComparisonModal from "../create-new/_components/ComparisonModal";
 
@@ -29,8 +28,8 @@ function SketchCreateNew() {
   const [roomType, setRoomType] = useState<string>("");
   const [selectedDesignTypes, setSelectedDesignTypes] = useState<string[]>([]);
   const [additionalReq, setAdditionalReq] = useState<string>("");
-  const [aiCreativity, setAiCreativity] = useState<number>(50);
-  const [removeFurniture, setRemoveFurniture] = useState(false);
+  const [aiCreativity] = useState<number>(50);
+  const [removeFurniture] = useState(false);
 
   // Custom hooks
   const fileHandling = useFileHandling();
@@ -78,7 +77,7 @@ function SketchCreateNew() {
         }`;
       await downloadImage(imageUrl, downloadFileName);
       toast.success("Converted image downloaded successfully!");
-    } catch (error) {
+    } catch {
       toast.error("Failed to download image");
     }
   };
@@ -128,10 +127,12 @@ function SketchCreateNew() {
                 <label htmlFor="sketch-upload" className="cursor-pointer">
                   {fileHandling.preview ? (
                     <div className="space-y-2">
-                      <img
+                      <Image
                         src={fileHandling.preview}
                         alt="Uploaded sketch"
-                        className="max-h-32 mx-auto rounded"
+                        width={200}
+                        height={128}
+                        className="max-h-32 mx-auto rounded object-contain"
                       />
                       <p className="text-sm text-gray-600">
                         Click to change sketch
@@ -235,10 +236,11 @@ function SketchCreateNew() {
                     onClick={() => modalHandling.openImageModal(result)}
                   >
                     <div className="relative rounded-lg overflow-hidden aspect-video bg-white shadow-md">
-                      <img
+                      <Image
                         src={result.generatedImage}
                         alt="Generated room"
-                        className="w-full h-full object-cover"
+                        fill
+                        className="object-cover"
                       />
                       <div className="absolute bottom-4 left-4 bg-black/70 text-white px-3 py-1 rounded-full text-sm">
                         Click to view full size
@@ -249,40 +251,20 @@ function SketchCreateNew() {
               </div>
             </div>
           ) : (
-            <div className="h-full flex items-center justify-center p-6">
-              <div className="text-center max-w-md">
-                {imageGeneration.isLoading ? (
-                  <div className="space-y-4">
-                    <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-purple-600 mx-auto"></div>
-                    <div className="space-y-2">
-                      <p className="text-lg font-medium">
-                        Converting your sketch...
-                      </p>
-                      <p className="text-sm text-gray-600">
-                        This may take a few moments
-                      </p>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    <div className="text-6xl">🎨</div>
-                    <div className="space-y-2">
-                      <h2 className="text-xl font-semibold">
-                        Upload your sketch to get started
-                      </h2>
-                      <p className="text-gray-600">
-                        Transform your hand-drawn room sketches into
-                        photorealistic interior designs.
-                      </p>
-                    </div>
-                  </div>
-                )}
-              </div>
+            <div className="w-full h-full flex flex-col items-center justify-center text-center p-8">
+              <div className="text-6xl mb-4">✨</div>
+              <h2 className="text-2xl font-semibold text-gray-700 mb-2">
+                Your generated designs will appear here
+              </h2>
+              <p className="text-gray-500 max-w-md">
+                Upload a sketch, select your preferences, and click
+                &quot;Convert to Reality&quot; to see the magic happen.
+              </p>
             </div>
           )}
         </div>
 
-        {/* Image Modal */}
+        {/* Modals */}
         <ImageModal
           result={modalHandling.modalImageResult}
           isOpen={!!modalHandling.modalImageResult}
@@ -296,15 +278,14 @@ function SketchCreateNew() {
           originalFileName={fileHandling.selectedFile?.name}
         />
 
-        {/* Comparison Modal */}
         <ComparisonModal
-          result={modalHandling.activeSlider}
           isOpen={!!modalHandling.activeSlider}
           onClose={modalHandling.closeSliderModal}
+          result={modalHandling.activeSlider}
         />
       </div>
     </Suspense>
   );
 }
 
-export default React.memo(SketchCreateNew);
+export default SketchCreateNew;

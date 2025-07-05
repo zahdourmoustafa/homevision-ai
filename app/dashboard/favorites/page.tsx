@@ -1,12 +1,13 @@
 "use client";
 
-import React, {
+import {
   useState,
   useEffect,
   useCallback,
   useMemo,
   lazy,
   Suspense,
+  memo,
 } from "react";
 import { Card } from "@/components/ui/card";
 import Image from "next/image";
@@ -30,7 +31,7 @@ interface FavoriteImage {
 }
 
 // Memoized favorite card component
-const FavoriteCard = React.memo(
+const FavoriteCard = memo(
   ({
     favorite,
     onRemove,
@@ -57,7 +58,7 @@ const FavoriteCard = React.memo(
           window.URL.revokeObjectURL(url);
           document.body.removeChild(link);
           toast.success("Image downloaded successfully!");
-        } catch (error) {
+        } catch {
           toast.error("Failed to download image");
         }
       },
@@ -129,7 +130,7 @@ const FavoriteCard = React.memo(
 FavoriteCard.displayName = "FavoriteCard";
 
 // Empty state component
-const EmptyFavorites = React.memo(() => (
+const EmptyFavorites = memo(() => (
   <div className="text-center py-16">
     <div className="text-6xl mb-4">💝</div>
     <h2 className="text-2xl font-semibold text-gray-700 mb-2">

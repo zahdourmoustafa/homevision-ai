@@ -80,20 +80,36 @@ export const RobustImage: React.FC<RobustImageProps> = ({
     );
   }
 
-  const imageProps = {
-    src: imageSrc,
-    alt,
-    className: `object-cover ${className}`,
-    sizes: sizes || "(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw",
-    priority,
-    onLoad: handleImageLoad,
-    onError: handleImageError,
-    ...(fill ? { fill: true } : { width, height }),
-  };
-
   return (
     <div className="relative w-full h-full">
-      <Image {...imageProps} />
+      {fill ? (
+        <Image
+          src={imageSrc}
+          alt={alt}
+          className={`object-cover ${className}`}
+          sizes={
+            sizes || "(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+          }
+          priority={priority}
+          onLoad={handleImageLoad}
+          onError={handleImageError}
+          fill
+        />
+      ) : (
+        <Image
+          src={imageSrc}
+          alt={alt}
+          className={`object-cover ${className}`}
+          sizes={
+            sizes || "(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+          }
+          priority={priority}
+          onLoad={handleImageLoad}
+          onError={handleImageError}
+          width={width}
+          height={height}
+        />
+      )}
       {status === "loading" && (
         <div className="absolute inset-0 flex items-center justify-center bg-gray-100 bg-opacity-50">
           <div className="w-8 h-8 border-2 border-gray-300 border-t-gray-600 rounded-full animate-spin"></div>

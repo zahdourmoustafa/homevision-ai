@@ -17,7 +17,7 @@ export const Gallery = () => {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-          {rooms.map((room, index) => (
+          {rooms.map((room) => (
             <div key={room.id} className="relative group">
               <div className="aspect-square bg-gray-300 rounded-lg overflow-hidden shadow-lg">
                 <div className="w-full h-full bg-gradient-to-br from-gray-200 to-gray-400 flex items-center justify-center">

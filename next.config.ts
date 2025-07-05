@@ -1,3 +1,5 @@
+import { Configuration } from "webpack";
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   // Enable experimental features for better performance
@@ -18,8 +20,8 @@ const nextConfig = {
   },
 
   // Optimize chunk splitting
-  webpack: (config, { isServer }) => {
-    if (!isServer) {
+  webpack: (config: Configuration, { isServer }: { isServer: boolean }) => {
+    if (!isServer && config.optimization) {
       config.optimization.splitChunks = {
         chunks: "all",
         cacheGroups: {

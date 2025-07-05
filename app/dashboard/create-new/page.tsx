@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, Suspense } from "react";
+import React, { useState, useEffect, Suspense, memo } from "react";
 import { toast } from "sonner";
 import LoadingSpinner from "../_components/LoadingSpinner";
 
@@ -59,7 +59,7 @@ function CreateNew() {
   const [roomType, setRoomType] = useState<string>("");
   const [selectedDesignTypes, setSelectedDesignTypes] = useState<string[]>([]);
   const [additionalReq, setAdditionalReq] = useState<string>("");
-  const [aiCreativity, setAiCreativity] = useState<number>(50);
+  const [aiCreativity] = useState<number>(50);
   const [removeFurniture, setRemoveFurniture] = useState(false);
 
   // Custom hooks
@@ -117,7 +117,7 @@ function CreateNew() {
         }`;
       await downloadImage(imageUrl, downloadFileName);
       toast.success("Image downloaded successfully!");
-    } catch (error) {
+    } catch {
       toast.error("Failed to download image");
     }
   };
@@ -210,4 +210,4 @@ function CreateNew() {
   );
 }
 
-export default React.memo(CreateNew);
+export default memo(CreateNew);

@@ -60,7 +60,7 @@ const uploadVideoToSupabase = async (
     console.log("Uploading video to Supabase storage...");
 
     // Upload the buffer to Supabase Storage
-    const { data, error } = await supabase.storage
+    const { error } = await supabase.storage
       .from("anime-videos")
       .upload(`generated/${finalFileName}`, buffer, {
         contentType: "video/mp4",

@@ -1,19 +1,10 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase"; // Assuming you'll use Supabase for storage
-import { Readable } from "stream";
 import { LumaAI } from "lumaai"; // Import LumaAI
 
 // Initialize Luma AI Client
 // Ensure LUMA_API_KEY is set in your environment variables
 const lumaClient = new LumaAI({ authToken: process.env.LUMA_API_KEY });
-
-// Placeholder for Luma API or other video generation service response
-type VideoGenerationResponse = {
-  id: string;
-  status: string; // e.g., 'processing', 'completed', 'failed'
-  video_url?: string; // URL of the generated video
-  failure_reason?: string;
-};
 
 // Helper to convert stream to buffer (needed for Supabase upload if directly from FormData)
 async function streamToBuffer(
@@ -44,7 +35,7 @@ const uploadFileToSupabase = async (
     const uniqueFileName = `${Date.now()}_${fileName}`;
     const filePath = `generated-videos/${uniqueFileName}`;
 
-    const { data, error } = await supabase.storage
+    const { error } = await supabase.storage
       .from("interior-images") // Consider a different bucket for videos, e.g., 'generated-media'
       .upload(filePath, buffer, {
         contentType,
@@ -114,8 +105,8 @@ const generateVideoWithAI = async (
         aspect_ratio: "16:9",
         loop: false,
       });
-    } catch (error) {
-      console.log("First attempt failed, trying alternative prompt...");
+    } catch (_error) {
+      console.log("First attempt failed, trying alternative prompt:", _error);
       currentPrompt = prompts[1];
 
       // Second attempt with alternative prompt
@@ -325,7 +316,7 @@ export async function POST(req: Request) {
       generatedVideoUrlFromAI
     );
 
-    let finalVideoUrl = generatedVideoUrlFromAI;
+    const finalVideoUrl = generatedVideoUrlFromAI;
 
     // 3. (Optional) If the AI returns a video that needs to be stored in your Supabase:
     //    - Download the video from `generatedVideoUrlFromAI`

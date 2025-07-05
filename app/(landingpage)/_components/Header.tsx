@@ -12,7 +12,7 @@ export const Header = () => {
           </span>{" "}
           Use code{" "}
           <span className="bg-yellow-400 text-black px-2 py-1 rounded font-bold">
-            "FLASH40"
+            {`"FLASH40"`}
           </span>{" "}
           at checkout for 60% off all plans!
         </p>
@@ -24,9 +24,11 @@ export const Header = () => {
           <div className="text-2xl font-bold text-blue-600">🏠roomGPT</div>
         </Link>
 
-        <Button className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg">
-          Login
-        </Button>
+        <Link href="/sign-in">
+          <Button className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg">
+            Login
+          </Button>
+        </Link>
       </nav>
     </header>
   );

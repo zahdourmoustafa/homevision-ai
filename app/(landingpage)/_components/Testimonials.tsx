@@ -80,7 +80,9 @@ export const Testimonials = () => {
                 </div>
 
                 {/* Quote */}
-                <p className="text-gray-700 italic">"{testimonial.quote}"</p>
+                <p className="text-gray-700 italic">
+                  {`"${testimonial.quote}"`}
+                </p>
 
                 {/* Author */}
                 <div className="flex items-center space-x-3">

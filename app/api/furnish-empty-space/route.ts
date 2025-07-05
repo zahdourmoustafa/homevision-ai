@@ -28,48 +28,6 @@ type LumaResponse = {
   };
 };
 
-// Define the structure of the request body
-interface FurnishRequestBody {
-  imageUrl: string;
-  roomType: string;
-  design: string;
-  additionalRequirement?: string;
-  userEmail: string;
-}
-
-// Separate function to convert an image URL to Base64
-// This function is still needed for the *output* from Luma before uploading to Supabase
-const convertImageUrlToBase64 = async (imageUrl: string): Promise<string> => {
-  try {
-    // Add timeout and retry logic for reliability
-    const response = await axios.get(imageUrl, {
-      responseType: "arraybuffer",
-      timeout: 15000, // 15 second timeout
-      maxRedirects: 5,
-      headers: {
-        Accept: "image/webp,image/png,image/jpeg,image/*",
-      },
-    });
-
-    // Convert the binary buffer to a Base64 string
-    const base64Image = Buffer.from(response.data, "binary").toString("base64");
-
-    // Get the content type from headers, default to image/png if not present
-    const contentType = response.headers["content-type"] || "image/png";
-
-    // Return the Base64 data URL
-    return `data:${contentType};base64,${base64Image}`;
-  } catch (error) {
-    console.error("Error converting image to Base64:", error);
-    if (axios.isAxiosError(error) && error.response) {
-      throw new Error(
-        `Failed to fetch image: ${error.response.status} ${error.response.statusText}`
-      );
-    }
-    throw new Error("Failed to convert image to Base64");
-  }
-};
-
 // Function to upload a Base64 image to Supabase Storage
 const uploadBase64ImageToSupabase = async (
   base64Image: string,
@@ -103,8 +61,7 @@ const uploadBase64ImageToSupabase = async (
       : `${fileName}${extension}`;
 
     // Upload the buffer to Supabase Storage
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { data: _data, error } = await supabase.storage
+    const { error } = await supabase.storage
       .from("interior-images")
       .upload(`furnished/${finalFileName}`, buffer, {
         contentType,
@@ -277,7 +234,7 @@ export async function POST(req: Request) {
     const imageBuffer = Buffer.from(await image.arrayBuffer());
     const fileName = `${Date.now()}-${image.name}`;
 
-    const { data: uploadData, error: uploadError } = await supabase.storage
+    const { error: uploadError } = await supabase.storage
       .from("interior-images")
       .upload(`originals/${fileName}`, imageBuffer, {
         contentType: image.type,
@@ -429,3 +386,36 @@ export async function POST(req: Request) {
     );
   }
 }
+
+// Separate function to convert an image URL to Base64
+// This function is still needed for the *output* from Luma before uploading to Supabase
+const convertImageUrlToBase64 = async (imageUrl: string): Promise<string> => {
+  try {
+    // Add timeout and retry logic for reliability
+    const response = await axios.get(imageUrl, {
+      responseType: "arraybuffer",
+      timeout: 15000, // 15 second timeout
+      maxRedirects: 5,
+      headers: {
+        Accept: "image/webp,image/png,image/jpeg,image/*",
+      },
+    });
+
+    // Convert the binary buffer to a Base64 string
+    const base64Image = Buffer.from(response.data, "binary").toString("base64");
+
+    // Get the content type from headers, default to image/png if not present
+    const contentType = response.headers["content-type"] || "image/png";
+
+    // Return the Base64 data URL
+    return `data:${contentType};base64,${base64Image}`;
+  } catch (error) {
+    console.error("Error converting image to Base64:", error);
+    if (axios.isAxiosError(error) && error.response) {
+      throw new Error(
+        `Failed to fetch image: ${error.response.status} ${error.response.statusText}`
+      );
+    }
+    throw new Error("Failed to convert image to Base64");
+  }
+};

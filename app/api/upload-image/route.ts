@@ -35,7 +35,7 @@ export async function POST(req: Request) {
     const fileName = `anime_source_${timestamp}.${extension}`;
 
     // Upload to Supabase storage
-    const { data, error } = await supabase.storage
+    const { error } = await supabase.storage
       .from("interior-images")
       .upload(`anime-photos/${fileName}`, buffer, {
         contentType: file.type,
