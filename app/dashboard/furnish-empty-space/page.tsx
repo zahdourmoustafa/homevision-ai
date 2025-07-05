@@ -112,7 +112,8 @@ function FurnishEmptySpace() {
         }`;
       await downloadImage(imageUrl, downloadFileName);
       toast.success("Image downloaded successfully!");
-    } catch {
+    } catch (error) {
+      console.error("Download failed:", error);
       toast.error("Failed to download image");
     }
   };

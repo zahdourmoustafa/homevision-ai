@@ -128,7 +128,8 @@ function SketchToReality() {
         }`;
       await downloadImage(imageUrl, downloadFileName);
       toast.success("Rendered image downloaded successfully!");
-    } catch {
+    } catch (error) {
+      console.error("Download failed:", error);
       toast.error("Failed to download image");
     }
   };
