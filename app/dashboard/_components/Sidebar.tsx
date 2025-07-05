@@ -1,5 +1,6 @@
 "use client";
 
+import React from "react";
 import {
   Home,
   Image as ImageIcon,
@@ -13,7 +14,33 @@ import {
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 
-export function Sidebar() {
+// Memoized navigation item component
+const NavItem = React.memo(
+  ({
+    href,
+    icon: Icon,
+    children,
+    ...props
+  }: {
+    href: string;
+    icon: React.ElementType;
+    children: React.ReactNode;
+    [key: string]: any;
+  }) => (
+    <Link href={href} prefetch={true}>
+      <Button
+        variant="ghost"
+        className="w-full justify-start gap-x-3 text-indigo-100 hover:bg-indigo-800 hover:text-white rounded-lg px-3 py-2"
+        {...props}
+      >
+        <Icon className="h-5 w-5" />
+        {children}
+      </Button>
+    </Link>
+  )
+);
+
+export const Sidebar = React.memo(() => {
   return (
     <div className="h-full flex flex-col gap-y-6 p-4 bg-blue-950 text-indigo-100 overflow-y-auto">
       <div className="flex items-center justify-center py-4">
@@ -27,81 +54,33 @@ export function Sidebar() {
       </div>
 
       <nav className="flex flex-col gap-y-1 flex-grow px-2">
-        <Link href="/dashboard">
-          <Button
-            variant="ghost"
-            className="w-full justify-start gap-x-3 text-indigo-100 hover:bg-indigo-800 hover:text-white rounded-lg px-3 py-2"
-          >
-            <Home className="h-5 w-5" />
-            Home
-          </Button>
-        </Link>
-        <Link href="#">
-          <Button
-            variant="ghost"
-            className="w-full justify-start gap-x-3 text-indigo-100 hover:bg-indigo-800 hover:text-white rounded-lg px-3 py-2"
-          >
-            <ImageIcon className="h-5 w-5" />
-            Design Studio
-          </Button>
-        </Link>
-        <Link href="#">
-          <Button
-            variant="ghost"
-            className="w-full justify-start gap-x-3 text-indigo-100 hover:bg-indigo-800 hover:text-white rounded-lg px-3 py-2"
-          >
-            <ImageIcon className="h-5 w-5" />
-            My Gallery
-          </Button>
-        </Link>
-        <Link href="#">
-          <Button
-            variant="ghost"
-            className="w-full justify-start gap-x-3 text-indigo-100 hover:bg-indigo-800 hover:text-white rounded-lg px-3 py-2"
-          >
-            <DollarSign className="h-5 w-5" />
-            Pricing
-          </Button>
-        </Link>
-        <Link href="#">
-          <Button
-            variant="ghost"
-            className="w-full justify-start gap-x-3 text-indigo-100 hover:bg-indigo-800 hover:text-white rounded-lg px-3 py-2"
-          >
-            <BookOpen className="h-5 w-5" />
-            Tutorials
-          </Button>
-        </Link>
-        <Link href="#">
-          <Button
-            variant="ghost"
-            className="w-full justify-start gap-x-3 text-indigo-100 hover:bg-indigo-800 hover:text-white rounded-lg px-3 py-2"
-          >
-            <Library className="h-5 w-5" />
-            Surface Library
-          </Button>
-        </Link>
-        <Link href="#">
-          <Button
-            variant="ghost"
-            className="w-full justify-start gap-x-3 text-indigo-100 hover:bg-indigo-800 hover:text-white rounded-lg px-3 py-2"
-          >
-            <Library className="h-5 w-5" />
-            Product Library
-          </Button>
-        </Link>
+        <NavItem href="/dashboard" icon={Home}>
+          Home
+        </NavItem>
+        <NavItem href="/dashboard/create-new" icon={ImageIcon}>
+          Design Studio
+        </NavItem>
+        <NavItem href="/dashboard/favorites" icon={ImageIcon}>
+          My Gallery
+        </NavItem>
+        <NavItem href="#" icon={DollarSign}>
+          Pricing
+        </NavItem>
+        <NavItem href="#" icon={BookOpen}>
+          Tutorials
+        </NavItem>
+        <NavItem href="#" icon={Library}>
+          Surface Library
+        </NavItem>
+        <NavItem href="#" icon={Library}>
+          Product Library
+        </NavItem>
       </nav>
 
       <div className="mt-auto flex flex-col gap-y-1 pb-4 px-2">
-        <Link href="#">
-          <Button
-            variant="ghost"
-            className="w-full justify-start gap-x-3 text-indigo-100 hover:bg-indigo-800 hover:text-white rounded-lg px-3 py-2"
-          >
-            <Settings className="h-5 w-5" />
-            Settings
-          </Button>
-        </Link>
+        <NavItem href="#" icon={Settings}>
+          Settings
+        </NavItem>
         <Button
           variant="ghost"
           className="w-full justify-start gap-x-3 text-indigo-100 hover:bg-indigo-800 hover:text-white rounded-lg px-3 py-2"
@@ -112,4 +91,6 @@ export function Sidebar() {
       </div>
     </div>
   );
-}
+});
+
+Sidebar.displayName = "Sidebar";

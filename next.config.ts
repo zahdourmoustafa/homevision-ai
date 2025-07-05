@@ -1,5 +1,57 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Enable experimental features for better performance
+  experimental: {
+    optimizePackageImports: [
+      "@radix-ui/react-icons",
+      "lucide-react",
+      "react-icons",
+    ],
+    turbo: {
+      rules: {
+        "*.svg": {
+          loaders: ["@svgr/webpack"],
+          as: "*.js",
+        },
+      },
+    },
+  },
+
+  // Optimize chunk splitting
+  webpack: (config, { isServer }) => {
+    if (!isServer) {
+      config.optimization.splitChunks = {
+        chunks: "all",
+        cacheGroups: {
+          default: {
+            minChunks: 2,
+            priority: -20,
+            reuseExistingChunk: true,
+          },
+          vendor: {
+            test: /[\\/]node_modules[\\/]/,
+            name: "vendors",
+            priority: -10,
+            chunks: "all",
+          },
+          radix: {
+            test: /[\\/]node_modules[\\/]@radix-ui[\\/]/,
+            name: "radix",
+            priority: 10,
+            chunks: "all",
+          },
+          icons: {
+            test: /[\\/]node_modules[\\/](react-icons|lucide-react|@tabler\/icons-react)[\\/]/,
+            name: "icons",
+            priority: 10,
+            chunks: "all",
+          },
+        },
+      };
+    }
+    return config;
+  },
+
   images: {
     remotePatterns: [
       {

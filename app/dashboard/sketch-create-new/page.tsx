@@ -1,278 +1,309 @@
 "use client";
 
-import React, { useState, useCallback, useMemo } from "react";
-import ImageSelection from "../create-new/_components/ImageSelection";
-import RoomType from "../create-new/_components/RoomType";
-import DesignType from "../create-new/_components/DesignType";
-import AdditionalReq from "../create-new/_components/AdditionalReq";
-import { Button } from "@/components/ui/button";
+import React, { useState, useEffect, Suspense } from "react";
 import { toast } from "sonner";
-import axios from "axios";
-import { supabase } from "@/lib/supabase";
-import { TextLoader } from "../create-new/_components/CustomLoading";
-import BeforeAfterSliderComponent from "../create-new/_components/BeforeAfterSlider";
-import { MdPhotoLibrary } from "react-icons/md";
-import { useUser } from "@clerk/nextjs";
-import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
-import Image from "next/image";
+import LoadingSpinner from "../_components/LoadingSpinner";
 
-interface GeneratedResult {
-  generatedImage: string;
-  rawImage: string;
-  timestamp: number;
-}
+// Import custom hooks from create-new (they're reusable)
+import { useFileHandling } from "../create-new/_components/hooks/useFileHandling";
+import {
+  useImageGeneration,
+  GenerationParams,
+} from "../create-new/_components/hooks/useImageGeneration";
+import { useImageModal } from "../create-new/_components/hooks/useImageModal";
+
+// Import components from create-new (they're reusable)
+import ImageUploadArea from "../create-new/_components/ImageUploadArea";
+import ControlPanel from "../create-new/_components/ControlPanel";
+import ImageModal from "../create-new/_components/ImageModal";
+import ComparisonModal from "../create-new/_components/ComparisonModal";
+
+// Import utilities
+import { downloadImage } from "../create-new/_components/utils/downloadUtils";
 
 function SketchCreateNew() {
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [formData, setFormData] = useState({
-    image: "",
-    room: "",
-    design: "",
-    additionalRequirement: "",
-  });
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const { user } = useUser();
-  const [generatedResults, setGeneratedResults] = useState<GeneratedResult[]>(
-    []
-  );
-  const [activeSlider, setActiveSlider] = useState<GeneratedResult | null>(
-    null
-  );
+  // Component state
+  const [isComponentsLoaded, setIsComponentsLoaded] = useState(false);
 
-  const onHandleInputChanged = useCallback(
-    (value: string, fieldName: string) => {
-      setFormData((prev) => ({
-        ...prev,
-        [fieldName]: value,
-      }));
-    },
-    []
-  );
+  // Room and design settings
+  const [roomType, setRoomType] = useState<string>("");
+  const [selectedDesignTypes, setSelectedDesignTypes] = useState<string[]>([]);
+  const [additionalReq, setAdditionalReq] = useState<string>("");
+  const [aiCreativity, setAiCreativity] = useState<number>(50);
+  const [removeFurniture, setRemoveFurniture] = useState(false);
 
-  const handleFileSelected = useCallback((file: File | null) => {
-    setSelectedFile(file);
+  // Custom hooks
+  const fileHandling = useFileHandling();
+  const imageGeneration = useImageGeneration();
+  const modalHandling = useImageModal();
+
+  // Load components after initial render
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setIsComponentsLoaded(true);
+    }, 100);
+    return () => clearTimeout(timer);
   }, []);
 
-  const loadingMessages = useMemo(
-    () => [
-      "Analyzing your sketch...",
-      "Converting to realistic design...",
-      "Adding realistic textures...",
-      "Enhancing details...",
-      "Almost there...",
-    ],
-    []
-  );
-
-  const saveRawImageToSupabase = async (file: File) => {
-    try {
-      const fileName = `sketch-${Date.now()}-${file.name}`;
-      const { data, error } = await supabase.storage
-        .from("interior-images")
-        .upload(fileName, file);
-
-      if (error) {
-        throw error;
-      }
-
-      const { data: publicUrlData } = supabase.storage
-        .from("interior-images")
-        .getPublicUrl(data.path);
-
-      return publicUrlData.publicUrl;
-    } catch (error) {
-      console.error("Error uploading image to Supabase:", error);
-      throw error;
-    }
-  };
-
-  const generateAiImage = useCallback(async () => {
-    if (!selectedFile) {
+  // Generate image handler
+  const handleGenerate = () => {
+    if (!fileHandling.selectedFile) {
       toast.error("Please upload a sketch image first.");
       return;
     }
 
-    if (!formData.room || !formData.design) {
+    if (!roomType || selectedDesignTypes.length === 0) {
       toast.error("Please select a room type and design style.");
       return;
     }
 
-    if (!user?.emailAddresses?.[0]?.emailAddress) {
-      toast.error("User email not found. Please ensure you are logged in.");
-      return;
-    }
+    const params: GenerationParams = {
+      roomType,
+      selectedDesignTypes,
+      additionalReq,
+      aiCreativity,
+      removeFurniture,
+    };
 
-    try {
-      setIsLoading(true);
-      setError(null);
-
-      const rawImgUrl = await saveRawImageToSupabase(selectedFile);
-
-      const result = await axios.post("/api/sketch-to-real", {
-        imageUrl: rawImgUrl,
-        roomType: formData.room,
-        design: formData.design,
-        additionalRequirement: formData.additionalRequirement,
-        userEmail: user.emailAddresses[0].emailAddress,
-      });
-
-      const newResult = {
-        generatedImage: result.data.result.generated,
-        rawImage: result.data.result.original,
-        timestamp: Date.now(),
-      };
-
-      setGeneratedResults((prev) => [...prev.slice(-3), newResult]);
-      toast.success("Sketch converted successfully!");
-    } catch (error) {
-      console.error("Error converting sketch:", error);
-      setError("Failed to convert sketch. Please try again.");
-      toast.error("Failed to convert sketch. Please try again.");
-    } finally {
-      setIsLoading(false);
-    }
-  }, [selectedFile, formData, user]);
-
-  const getGridPositionClasses = (index: number) => {
-    const positions = [
-      "col-start-1 row-start-1",
-      "col-start-2 row-start-1",
-      "col-start-1 row-start-2",
-      "col-start-2 row-start-2",
-    ];
-    return positions[index] || positions[0];
+    imageGeneration.generateImage(fileHandling.selectedFile, params);
   };
 
+  // Download handler
+  const handleDownload = async (imageUrl: string, fileName?: string) => {
+    try {
+      const downloadFileName =
+        fileName ||
+        `sketch-${Date.now()}-${
+          fileHandling.selectedFile?.name || "converted.jpg"
+        }`;
+      await downloadImage(imageUrl, downloadFileName);
+      toast.success("Converted image downloaded successfully!");
+    } catch (error) {
+      toast.error("Failed to download image");
+    }
+  };
+
+  // Check if generation is possible
+  const canGenerate = !!(
+    fileHandling.selectedFile &&
+    roomType &&
+    selectedDesignTypes.length > 0 &&
+    !imageGeneration.isLoading
+  );
+
+  // Show loading spinner initially
+  if (!isComponentsLoaded) {
+    return <LoadingSpinner message="Loading sketch converter..." />;
+  }
+
   return (
-    <div className="flex flex-col md:flex-row min-h-screen bg-white">
-      <div className="w-full md:w-[600px] border-b md:border-b-0 md:border-r bg-white p-3">
-        <div className="space-y-4 pt-4">
-          <div className="space-y-1 px-4">
-            <h2 className="text-xl font-semibold">Sketch to Reality</h2>
-            <p className="text-xs text-gray-500">
-              Transform your room sketches into photorealistic interior designs
-            </p>
-          </div>
+    <Suspense fallback={<LoadingSpinner message="Loading interface..." />}>
+      <div className="flex flex-col md:flex-row min-h-screen bg-white">
+        {/* Left Sidebar - Controls */}
+        <div className="w-full md:w-[400px] border-b md:border-b-0 md:border-r bg-white">
+          <div className="p-6">
+            <div className="space-y-1 mb-6">
+              <h2 className="text-2xl font-semibold text-purple-700">
+                Sketch to Reality
+              </h2>
+              <p className="text-sm text-gray-600">
+                Transform your room sketches into photorealistic interior
+                designs
+              </p>
+            </div>
 
-          <div className="space-y-1">
-            <ImageSelection onFileSelected={handleFileSelected} />
-          </div>
+            {/* Simplified upload area */}
+            <div className="mb-6">
+              <label className="block text-sm font-medium mb-2">
+                Upload Sketch
+              </label>
+              <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center hover:border-purple-500 transition-colors">
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  id="sketch-upload"
+                  onChange={fileHandling.handleFileInputChange}
+                />
+                <label htmlFor="sketch-upload" className="cursor-pointer">
+                  {fileHandling.preview ? (
+                    <div className="space-y-2">
+                      <img
+                        src={fileHandling.preview}
+                        alt="Uploaded sketch"
+                        className="max-h-32 mx-auto rounded"
+                      />
+                      <p className="text-sm text-gray-600">
+                        Click to change sketch
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <div className="text-4xl">🎨</div>
+                      <p className="text-sm text-gray-600">
+                        Click to upload your sketch
+                      </p>
+                      <p className="text-xs text-gray-400">(PNG, JPG, JPEG)</p>
+                    </div>
+                  )}
+                </label>
+              </div>
+            </div>
 
-          <div className="space-y-1">
-            <RoomType
-              selectedRoomType={(value) => onHandleInputChanged(value, "room")}
-            />
-          </div>
+            {/* Simple room type selector */}
+            <div className="mb-6">
+              <label className="block text-sm font-medium mb-2">
+                Room Type
+              </label>
+              <select
+                value={roomType}
+                onChange={(e) => setRoomType(e.target.value)}
+                className="w-full p-2 border rounded-md"
+              >
+                <option value="">Select room type</option>
+                <option value="living-room">Living Room</option>
+                <option value="bedroom">Bedroom</option>
+                <option value="kitchen">Kitchen</option>
+                <option value="bathroom">Bathroom</option>
+                <option value="office">Office</option>
+                <option value="dining-room">Dining Room</option>
+              </select>
+            </div>
 
-          <div className="space-y-1">
-            <DesignType
-              selectedDesign={(value) => onHandleInputChanged(value, "design")}
-            />
-          </div>
+            {/* Simple design style selector */}
+            <div className="mb-6">
+              <label className="block text-sm font-medium mb-2">
+                Design Style
+              </label>
+              <select
+                value={selectedDesignTypes[0] || ""}
+                onChange={(e) =>
+                  setSelectedDesignTypes(e.target.value ? [e.target.value] : [])
+                }
+                className="w-full p-2 border rounded-md"
+              >
+                <option value="">Select design style</option>
+                <option value="modern">Modern</option>
+                <option value="traditional">Traditional</option>
+                <option value="minimalist">Minimalist</option>
+                <option value="industrial">Industrial</option>
+                <option value="scandinavian">Scandinavian</option>
+                <option value="contemporary">Contemporary</option>
+              </select>
+            </div>
 
-          <div className="space-y-1">
-            <AdditionalReq
-              AdditionalReq={(value) =>
-                onHandleInputChanged(value, "additionalRequirement")
-              }
-            />
-          </div>
+            {/* Additional requirements */}
+            <div className="mb-6">
+              <label className="block text-sm font-medium mb-2">
+                Additional Notes (Optional)
+              </label>
+              <textarea
+                value={additionalReq}
+                onChange={(e) => setAdditionalReq(e.target.value)}
+                placeholder="E.g., add specific furniture, color preferences..."
+                className="w-full p-2 border rounded-md h-20 resize-none text-sm"
+              />
+            </div>
 
-          <div className="px-8">
-            <Button
-              onClick={generateAiImage}
-              disabled={
-                isLoading || !selectedFile || !formData.room || !formData.design
-              }
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white h-9"
+            {/* Generate button */}
+            <button
+              onClick={handleGenerate}
+              disabled={!canGenerate}
+              className="w-full bg-purple-600 hover:bg-purple-700 disabled:bg-gray-300 text-white py-3 rounded-md font-medium transition-colors"
             >
-              {isLoading ? "Converting..." : "Convert Sketch"}
-            </Button>
+              {imageGeneration.isLoading
+                ? "Converting Sketch..."
+                : "Convert to Reality"}
+            </button>
 
-            {error && <p className="text-red-500 text-xs mt-1">{error}</p>}
-
-            <p className="text-xs text-gray-500 mt-2">
+            <p className="text-xs text-gray-500 mt-2 text-center">
               NOTE: 1 credit will be used to convert your sketch
             </p>
           </div>
         </div>
-      </div>
 
-      <div className="flex-1 p-4 md:p-8 bg-gray-100">
-        <div className="h-full flex items-center justify-center">
-          {generatedResults.length > 0 ? (
-            <>
-              <div className="w-full max-w-4xl">
-                <div className="grid grid-cols-2 gap-4">
-                  {generatedResults.map((result, index) => (
-                    <div
-                      key={result.timestamp}
-                      className={`${getGridPositionClasses(
-                        index
-                      )} relative cursor-pointer hover:opacity-90 transition-opacity`}
-                      onClick={() => setActiveSlider(result)}
-                    >
-                      <div className="relative rounded-lg overflow-hidden aspect-video">
-                        <Image
-                          src={result.generatedImage}
-                          alt={`Generated room ${index + 1}`}
-                          layout="fill"
-                          objectFit="cover"
-                          unoptimized
-                        />
-                        <div className="absolute bottom-4 left-4 bg-black/70 text-white px-3 py-1 rounded-full text-sm">
-                          Click to compare
-                        </div>
+        {/* Right Content Area */}
+        <div className="flex-1 bg-gray-50">
+          {imageGeneration.generatedResults.length > 0 ? (
+            <div className="p-6">
+              <h3 className="text-lg font-semibold mb-4">Generated Results</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {imageGeneration.generatedResults.map((result) => (
+                  <div
+                    key={result.timestamp}
+                    className="relative cursor-pointer hover:opacity-90 transition-opacity"
+                    onClick={() => modalHandling.openImageModal(result)}
+                  >
+                    <div className="relative rounded-lg overflow-hidden aspect-video bg-white shadow-md">
+                      <img
+                        src={result.generatedImage}
+                        alt="Generated room"
+                        className="w-full h-full object-cover"
+                      />
+                      <div className="absolute bottom-4 left-4 bg-black/70 text-white px-3 py-1 rounded-full text-sm">
+                        Click to view full size
                       </div>
                     </div>
-                  ))}
-                </div>
+                  </div>
+                ))}
               </div>
-
-              <Dialog
-                open={activeSlider !== null}
-                onOpenChange={() => setActiveSlider(null)}
-              >
-                <DialogContent className="max-w-[1000px] w-full h-[700px] p-0">
-                  <DialogTitle className="sr-only">
-                    Image Comparison
-                  </DialogTitle>
-                  {activeSlider && (
-                    <BeforeAfterSliderComponent
-                      beforeImage={activeSlider.rawImage || ""}
-                      afterImage={activeSlider.generatedImage || ""}
-                    />
-                  )}
-                </DialogContent>
-              </Dialog>
-            </>
-          ) : isLoading ? (
-            <div className="w-full max-w-4xl flex flex-col items-center justify-center p-6">
-              <TextLoader
-                messages={loadingMessages}
-                interval={3000}
-                dotCount={3}
-                direction="vertical"
-              />
             </div>
           ) : (
-            <div className="w-full max-w-4xl flex flex-col items-center justify-center p-6">
-              <MdPhotoLibrary className="w-10 h-10 text-gray-500 justify-center items-center" />
-              <div className="text-center">
-                <h1 className="text-xl font-bold">
-                  Upload your sketch to get started
-                </h1>
-                <p className="text-gray-500 text-sm mt-2">
-                  Transform your hand-drawn room sketches into photorealistic
-                  interior designs.
-                </p>
+            <div className="h-full flex items-center justify-center p-6">
+              <div className="text-center max-w-md">
+                {imageGeneration.isLoading ? (
+                  <div className="space-y-4">
+                    <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-purple-600 mx-auto"></div>
+                    <div className="space-y-2">
+                      <p className="text-lg font-medium">
+                        Converting your sketch...
+                      </p>
+                      <p className="text-sm text-gray-600">
+                        This may take a few moments
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    <div className="text-6xl">🎨</div>
+                    <div className="space-y-2">
+                      <h2 className="text-xl font-semibold">
+                        Upload your sketch to get started
+                      </h2>
+                      <p className="text-gray-600">
+                        Transform your hand-drawn room sketches into
+                        photorealistic interior designs.
+                      </p>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           )}
         </div>
+
+        {/* Image Modal */}
+        <ImageModal
+          result={modalHandling.modalImageResult}
+          isOpen={!!modalHandling.modalImageResult}
+          onClose={modalHandling.closeImageModal}
+          onDownload={handleDownload}
+          onOpenSlider={(result) => {
+            modalHandling.closeImageModal();
+            modalHandling.openSliderModal(result);
+          }}
+          onDelete={imageGeneration.deleteImage}
+          originalFileName={fileHandling.selectedFile?.name}
+        />
+
+        {/* Comparison Modal */}
+        <ComparisonModal
+          result={modalHandling.activeSlider}
+          isOpen={!!modalHandling.activeSlider}
+          onClose={modalHandling.closeSliderModal}
+        />
       </div>
-    </div>
+    </Suspense>
   );
 }
 

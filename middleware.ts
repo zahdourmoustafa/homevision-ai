@@ -57,6 +57,29 @@ export default clerkMiddleware(async (auth, request: NextRequest) => {
   // Refresh Supabase session if expired - important for Server Components
   await supabase.auth.getUser();
 
+  // Add performance optimization headers
+  if (request.nextUrl.pathname.startsWith("/dashboard")) {
+    // Add prefetch headers for dashboard routes
+    response.headers.set(
+      "Link",
+      "</dashboard/create-new>; rel=prefetch, " +
+        "</dashboard/animephoto>; rel=prefetch, " +
+        "</dashboard/furnish-empty-space>; rel=prefetch, " +
+        "</dashboard/sketch-to-reality>; rel=prefetch"
+    );
+
+    // Add cache control for static dashboard assets
+    response.headers.set(
+      "Cache-Control",
+      "public, max-age=60, stale-while-revalidate=120"
+    );
+  }
+
+  // Add general performance headers
+  response.headers.set("X-Content-Type-Options", "nosniff");
+  response.headers.set("X-Frame-Options", "DENY");
+  response.headers.set("X-XSS-Protection", "1; mode=block");
+
   // Return the potentially modified response (e.g., with updated Supabase session cookies)
   // Clerk's middleware implicitly handles returning its own response if it redirects, etc.
   // If Clerk doesn't redirect, we return the response potentially modified by Supabase.
@@ -72,6 +95,6 @@ export const config = {
      * - favicon.ico (favicon file)
      * Feel free to modify this pattern to suit your needs.
      */
-    "/((?!_next/static|_next/image|favicon.ico|api/).*)",
+    "/((?!_next/static|_next/image|favicon.ico|.*\\..*).*)",
   ],
 };
